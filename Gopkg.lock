@@ -3,24 +3,15 @@
 
 [[projects]]
   branch = "master"
+  name = "cirello.io/HumorChecker"
+  packages = ["."]
+  revision = "73b6bde3099ef8575ec8c9969c3bf530b8753e50"
+
+[[projects]]
+  branch = "master"
   name = "github.com/AndreasBriese/bbloom"
   packages = ["."]
   revision = "28f7e881ca57bc00e028f9ede9f0d9104cfeef5e"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/cdipaolo/goml"
-  packages = [
-    "base",
-    "text"
-  ]
-  revision = "e2d8def04c9a19893aba223c21899c77089651ee"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/cdipaolo/sentiment"
-  packages = ["."]
-  revision = "5ab0aec020b4f9c3b01020ec6048f13f874827cd"
 
 [[projects]]
   name = "github.com/dgraph-io/badger"
@@ -81,15 +72,9 @@
   packages = ["unix"]
   revision = "7dca6fe1f43775aa6d1334576870ff63f978f539"
 
-[[projects]]
-  name = "golang.org/x/text"
-  packages = ["transform"]
-  revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
-  version = "v0.3.0"
-
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2e771412c8be887cc9fa89ed8a8832e39116fddc2c47963fe809278229ea0da8"
+  inputs-digest = "87d18272f0a69854680d11a949a863454236e128d9553a0260b1bc75b6dd9436"
   solver-name = "gps-cdcl"
   solver-version = 1

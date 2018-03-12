@@ -1,47 +1,69 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"sync"
-
-	"github.com/cdipaolo/sentiment"
+	hc "cirello.io/HumorChecker"
 	"github.com/dgraph-io/badger"
 	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
 )
 
+type Response struct {
+	Items []Pair `json:"items"`
+}
+
+type Pair struct {
+	Key   string
+	Value string
+}
+
 type SlackBot struct {
 	db     *badger.DB
-	rtm   *slack.RTM
-	model sentiment.Models
-	done  chan struct{}
+	rtm    *slack.RTM
+	server *http.Server
+	done   chan struct{}
 }
 
 func (s *SlackBot) Start() error {
 	s.done = make(chan struct{})
+	var wg sync.WaitGroup
 	var err error
-
-	// init the sentiment model
-	s.model, err = sentiment.Restore()
-	if err != nil {
-		return err
-	}
 
 	s.db, err = initBadger()
 	if err != nil {
 		return err
 	}
 
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.index)
+
+	s.server = &http.Server{Addr: "0.0.0.0:1313", Handler: mux}
+
+	wg.Add(1)
+	go func() {
+		fmt.Println("-- Listening on http://0.0.0.0:1313")
+
+		if err := s.server.ListenAndServe(); err != nil {
+			if err != http.ErrServerClosed {
+				fmt.Fprintf(os.Stderr, "during ListAndServe(): %s\n", err)
+				s.Stop()
+			}
+		}
+		wg.Done()
+	}()
+
 	// In a for loop because poorly written gorilla garbage panics occasionally
 	for {
-		var wg sync.WaitGroup
-
 
 		token := os.Getenv("SLACK_TOKEN")
 		if token == "" {
@@ -70,6 +92,48 @@ func (s *SlackBot) Start() error {
 	}
 }
 
+func (s *SlackBot) Stop() {
+	s.server.Shutdown(context.Background())
+	s.rtm.Disconnect()
+	s.db.Close()
+	close(s.done)
+}
+
+func (s *SlackBot) index(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("GET /")
+	var response Response
+
+	err := s.db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+		opts.PrefetchSize = 10
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			k := item.Key()
+			v, err := item.Value()
+			if err != nil {
+				return err
+			}
+
+			response.Items = append(response.Items, Pair{Key: string(k), Value: string(v)})
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Fprint(os.Stderr, "during DB View: %s\n", err)
+		w.WriteHeader(500)
+	}
+	fmt.Printf("Response: %+v\n", response)
+	resp, err := json.Marshal(response)
+	if err != nil {
+		fmt.Fprint(os.Stderr, "during JSON marshall: %s\n", err)
+		w.WriteHeader(500)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(resp)
+}
+
 func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 	defer func() {
 		// Gorilla Websockets can panic
@@ -89,7 +153,7 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 
 			case *slack.MessageEvent:
 				fmt.Printf("Message: %v\n", ev)
-				countMessage(ev)
+				s.countMessage(ev)
 
 				info := s.rtm.GetInfo()
 				prefix := fmt.Sprintf("<@%s> ", info.User.ID)
@@ -113,12 +177,6 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 	}
 }
 
-func (s *SlackBot) Stop() {
-	s.rtm.Disconnect()
-	db.Close()
-	close(s.done)
-}
-
 func toHour(epoc string) string {
 	float, err := strconv.ParseFloat(epoc, 64)
 	if err != nil {
@@ -128,8 +186,37 @@ func toHour(epoc string) string {
 	return timestamp.Format("2006-01-02T15")
 }
 
-func datapoint(items ...string) []byte {
+func dataPoint(items ...string) []byte {
 	return []byte(strings.Join(items, "/"))
+}
+
+func (s *SlackBot) countMessage(ev *slack.MessageEvent) {
+	// get the hour from message timestamp
+	hour := toHour(ev.Timestamp)
+
+	// Start a badger transaction
+	s.db.Update(func(txn *badger.Txn) error {
+		err := increment(txn, dataPoint(hour, ev.User, "messages", ev.Channel))
+		if err != nil {
+			fmt.Fprint(os.Stderr, "during 'messages' increment: %s\n", err)
+		}
+
+		result := hc.Analyze(ev.Text)
+		fmt.Printf("Result: %+v\n", result)
+		if result.Score > 0 {
+			err = increment(txn, dataPoint(hour, ev.User, "positive", ev.Channel))
+			if err != nil {
+				fmt.Fprint(os.Stderr, "during 'messages' increment: %s\n", err)
+			}
+		}
+		if result.Score < 0 {
+			increment(txn, dataPoint(hour, ev.User, "negative", ev.Channel))
+			if err != nil {
+				fmt.Fprint(os.Stderr, "during 'messages' increment: %s\n", err)
+			}
+		}
+		return nil
+	})
 }
 
 func increment(txn *badger.Txn, key []byte) error {
@@ -145,7 +232,7 @@ func increment(txn *badger.Txn, key []byte) error {
 	// If value exists in the store, retrieve the current counter
 	if item != nil {
 		value, err := item.Value()
-		if value != nil {
+		if err != nil {
 			return errors.Wrapf(err, "while fetching counter value '%s'", key)
 		}
 		counter, err = strconv.ParseInt(string(value), 10, 64)
@@ -157,30 +244,6 @@ func increment(txn *badger.Txn, key []byte) error {
 		return errors.Wrapf(err, "while setting counter for key '%s'", key)
 	}
 	return err
-}
-
-func countMessage(ev *slack.MessageEvent) {
-	// get the hour from message timestamp
-	hour := toHour(ev.Timestamp)
-
-	// Start a badger transaction
-	err := db.Update(func(txn *badger.Txn) error {
-		return increment(txn, datapoint(hour, ev.User, "messages", ev.Channel))
-	})
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "while recording message counts: %s\n", err)
-	}
-
-	// Increment the messages counter for this hour
-	/*increment(hour, ev.Username, "messages", ev.Channel)
-
-	// Increment the sentiment counters for this message
-	if sModel.SentimentAnalysis(ev.Text, sentiment.English).Score == 1 {
-		increment(hour, ev.Username, "positive", ev.Channel)
-	} else {
-		increment(hour, ev.Username, "negative", ev.Channel)
-	}*/
 }
 
 func initBadger() (*badger.DB, error) {
@@ -195,11 +258,6 @@ func initBadger() (*badger.DB, error) {
 	}
 	return db, nil
 }
-
-
-// Globals, because why not
-var (
-)
 
 func main() {
 	bot := SlackBot{}

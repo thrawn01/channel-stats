@@ -27,7 +27,7 @@
 
 [[constraint]]
   branch = "master"
-  name = "github.com/cdipaolo/sentiment"
+  name = "cirello.io/HumorChecker"
 
 [[constraint]]
   name = "github.com/dgraph-io/badger"
