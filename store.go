@@ -2,6 +2,7 @@ package channelstats
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -18,16 +19,6 @@ type Store struct {
 	db *badger.DB
 }
 
-type DataPoint struct {
-	Key   string
-	Value string
-}
-
-type UserSums struct {
-	User string
-	Sum  int64
-}
-
 func NewStore() (*Store, error) {
 	opts := badger.DefaultOptions
 	opts.Dir = "./badger"
@@ -41,46 +32,58 @@ func NewStore() (*Store, error) {
 	return &Store{db: db}, nil
 }
 
-func (s *Store) CountMessage(ev *slack.MessageEvent) error {
-	float, err := strconv.ParseFloat(ev.Timestamp, 64)
-	if err != nil {
-		return errors.Wrapf(err, "timestamp conversion for '%s'", ev.Timestamp)
-	}
-	timestamp := time.Unix(0, int64(float*1000000)*int64(time.Microsecond/time.Nanosecond)).UTC()
-	hour := timestamp.Format(hourLayout)
-
-	// Start a badger transaction
-	return s.db.Update(func(txn *badger.Txn) error {
-		err := incDataPoint(txn, hour, "messages", ev.Channel, ev.User)
-		if err != nil {
-			errors.Wrapf(err, "while storing 'messages' datapoint")
-		}
-
-		result := hc.Analyze(ev.Text)
-		fmt.Printf("Result: %+v\n", result)
-		if result.Score > 0 {
-			err = incDataPoint(txn, hour, "positive", ev.Channel, ev.User)
-			if err != nil {
-				errors.Wrapf(err, "while storing 'positive' datapoint")
-			}
-		}
-		if result.Score < 0 {
-			incDataPoint(txn, hour, "negative", ev.Channel, ev.User)
-			if err != nil {
-				errors.Wrapf(err, "while storing 'negative' datapoint")
-			}
-		}
-		return nil
-	})
+type DataPoint struct {
+	Hour      string
+	UserID    string
+	ChannelID string
+	DataType  string
+	Value     int64
 }
 
-func (s *Store) GetDataPoints(timeRange *TimeRange, typ, channelID string) ([]DataPoint, error) {
+func DataPointFrom(item *badger.Item) (DataPoint, error) {
+	parts := strings.Split(string(item.Key()), "/")
+
+	value, err := item.Value()
+	if err != nil {
+		return DataPoint{}, errors.Wrap(err, "while converting back to a data point; item.Value() returned")
+	}
+
+	// Decode the int
+	valueInt, err := strconv.ParseInt(string(value), 10, 64)
+	//valueInt, _ := binary.Varint(value)
+
+	return DataPoint{
+		Hour:      parts[0],
+		DataType:  parts[1],
+		ChannelID: parts[2],
+		UserID:    parts[3],
+		Value:     valueInt,
+	}, nil
+}
+
+func (s DataPoint) Key() []byte {
+	return []byte(fmt.Sprintf("%s/%s/%s/%s", s.Hour, s.DataType, s.ChannelID, s.UserID))
+}
+
+func (s DataPoint) PrefixKey() []byte {
+	return []byte(fmt.Sprintf("%s/%s/%s", s.Hour, s.DataType, s.ChannelID))
+}
+
+func (s DataPoint) EncodeValue() []byte {
+	//buf := make([]byte, binary.MaxVarintLen64)
+	//n := binary.PutVarint(buf, s.Value)
+	//return buf[:n]
+	return []byte(fmt.Sprintf("%d", s.Value))
+}
+
+func (s *Store) GetDataPoints(timeRange *TimeRange, dataType, channelID string) ([]DataPoint, error) {
 	var results []DataPoint
 
 	for _, hour := range timeRange.ByHour() {
-		data, err := s.GetByPrefix(hour, typ, channelID)
+		dp := DataPoint{Hour: hour, DataType: dataType, ChannelID: channelID}
+		data, err := s.GetByPrefix(dp.PrefixKey())
 		if err != nil {
-			return nil, errors.Wrapf(err, "during while getting data points for '%s'", hour)
+			return nil, errors.Wrapf(err, "during while getting data points for prefix '%s'", dp.PrefixKey())
 		}
 
 		if len(data) != 0 {
@@ -90,21 +93,52 @@ func (s *Store) GetDataPoints(timeRange *TimeRange, typ, channelID string) ([]Da
 	return results, nil
 }
 
-func (s Store) GetByPrefix(keys ...string) ([]DataPoint, error) {
+type UserSum struct {
+	User string
+	Sum  int64
+}
+
+func (s *Store) SumByUser(timeRange *TimeRange, dataType, channelID string) ([]UserSum, error) {
+	var results []UserSum
+
+	dataPoints, err := s.GetDataPoints(timeRange, dataType, channelID)
+	if err != nil {
+		return nil, err
+	}
+
+	byUser := make(map[string]int64)
+	for _, dp := range dataPoints {
+		if value, exists := byUser[dp.UserID]; exists {
+			byUser[dp.UserID] = value + dp.Value
+		} else {
+			byUser[dp.UserID] = dp.Value
+		}
+	}
+
+	for key, value := range byUser {
+		results = append(results, UserSum{User: key, Sum: value})
+	}
+
+	// Sort the results
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Sum < results[j].Sum
+	})
+
+	return results, nil
+}
+
+func (s Store) GetByPrefix(keyPrefix []byte) ([]DataPoint, error) {
 	var results []DataPoint
-	prefix := []byte(strings.Join(keys, "/"))
 
 	err := s.db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
-		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-			item := it.Item()
-			k := item.Key()
-			v, err := item.Value()
+		for it.Seek(keyPrefix); it.ValidForPrefix(keyPrefix); it.Next() {
+			dp, err := DataPointFrom(it.Item())
 			if err != nil {
 				return err
 			}
-			results = append(results, DataPoint{Key: string(k), Value: string(v)})
+			results = append(results, dp)
 		}
 		return nil
 	})
@@ -119,14 +153,11 @@ func (s *Store) GetAll() ([]DataPoint, error) {
 		it := txn.NewIterator(badger.DefaultIteratorOptions)
 		defer it.Close()
 		for it.Rewind(); it.Valid(); it.Next() {
-			item := it.Item()
-			k := item.Key()
-			v, err := item.Value()
+			dp, err := DataPointFrom(it.Item())
 			if err != nil {
 				return err
 			}
-
-			results = append(results, DataPoint{Key: string(k), Value: string(v)})
+			results = append(results, dp)
 		}
 		return nil
 	})
@@ -137,10 +168,51 @@ func (s *Store) Close() {
 	s.db.Close()
 }
 
-func incDataPoint(txn *badger.Txn, keys ...string) error {
-	key := []byte(strings.Join(keys, "/"))
+func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
+	float, err := strconv.ParseFloat(ev.Timestamp, 64)
+	if err != nil {
+		return errors.Wrapf(err, "timestamp conversion for '%s'", ev.Timestamp)
+	}
+	timestamp := time.Unix(0, int64(float*1000000)*int64(time.Microsecond/time.Nanosecond)).UTC()
 
-	// Fetch this data point from the store
+	dp := DataPoint{
+		Hour:      timestamp.Format(hourLayout),
+		ChannelID: ev.Channel,
+		UserID:    ev.User,
+		Value:     int64(1),
+	}
+
+	// Start a badger transaction
+	return s.db.Update(func(txn *badger.Txn) error {
+		dp.DataType = "messages"
+		err := saveDataPoint(txn, dp)
+		if err != nil {
+			errors.Wrapf(err, "while storing 'messages' data point")
+		}
+
+		result := hc.Analyze(ev.Text)
+		if result.Score > 0 {
+			dp.DataType = "positive"
+			err = saveDataPoint(txn, dp)
+			if err != nil {
+				errors.Wrapf(err, "while storing 'positive' data point")
+			}
+		}
+		if result.Score < 0 {
+			dp.DataType = "negative"
+			saveDataPoint(txn, dp)
+			if err != nil {
+				errors.Wrapf(err, "while storing 'negative' data point")
+			}
+		}
+		return nil
+	})
+}
+
+func saveDataPoint(txn *badger.Txn, dp DataPoint) error {
+	key := dp.Key()
+
+	// Fetch data point from the store if it exists
 	item, err := txn.Get(key)
 	if err != nil {
 		if err != badger.ErrKeyNotFound {
@@ -148,18 +220,17 @@ func incDataPoint(txn *badger.Txn, keys ...string) error {
 		}
 	}
 
-	var counter int64
-	// If value exists in the store, retrieve the current counter
+	// If data point exists in the store, retrieve the current data point
 	if item != nil {
-		value, err := item.Value()
+		dpCurrent, err := DataPointFrom(item)
 		if err != nil {
 			return errors.Wrapf(err, "while fetching counter value '%s'", key)
 		}
-		counter, err = strconv.ParseInt(string(value), 10, 64)
+		// Add to our current value
+		dp.Value += dpCurrent.Value
 	}
-	// Increment our counter
-	counter += 1
-	err = txn.Set(key, []byte(fmt.Sprintf("%d", counter)))
+
+	err = txn.Set(key, dp.EncodeValue())
 	if err != nil {
 		return errors.Wrapf(err, "while setting counter for key '%s'", key)
 	}

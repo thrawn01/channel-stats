@@ -13,19 +13,31 @@ type TimeRange struct {
 }
 
 func NewTimeRange(start, end string) (*TimeRange, error) {
+	var startTime, endTime time.Time
+	var err error
 
-	// Cheap, but works for now
-	if len(start) == 0 || len(end) == 0 {
-		return &TimeRange{time.Now().UTC().AddDate(0, -1, 0), time.Now()}, nil
+	if len(start) != 0 {
+		startTime, err = time.Parse(time.RFC1123, start)
+		if err != nil {
+			return nil, errors.Wrap(err, "'start' is not valid 'RFC1123 time string")
+		}
 	}
 
-	startTime, err := time.Parse(time.RFC1123, start)
-	if err != nil {
-		return nil, errors.Wrap(err, "'start' is not valid 'RFC1123 time string")
+	if len(end) != 0 {
+		endTime, err = time.Parse(time.RFC1123, end)
+		if err != nil {
+			return nil, errors.Wrap(err, "'end' is not valid 'RFC1123 time string")
+		}
 	}
-	endTime, err := time.Parse(time.RFC1123, end)
-	if err != nil {
-		return nil, errors.Wrap(err, "'end' is not valid 'RFC1123 time string")
+
+	// If no end time specified, choose now
+	if endTime.IsZero() {
+		endTime = time.Now()
+	}
+
+	// If no start time specified, choose 1 week (aka 7 days)
+	if startTime.IsZero() {
+		startTime = time.Now().AddDate(0, 0, -7)
 	}
 
 	if endTime.Before(startTime) {
@@ -33,20 +45,21 @@ func NewTimeRange(start, end string) (*TimeRange, error) {
 	}
 
 	return &TimeRange{
-		Start: startTime,
-		End:   endTime,
+		Start: startTime.UTC(),
+		End:   endTime.UTC(),
 	}, nil
 }
 
 func (s *TimeRange) ByHour() []string {
 	var result []string
+	result = append(result, s.Start.Format(hourLayout))
 	it := s.Start
 	for {
-		result = append(result, it.Format(hourLayout))
-		it.Add(time.Hour)
-		if it.Before(s.End) {
-			continue
+		it = it.Add(time.Hour)
+		if it.After(s.End) {
+			break
 		}
+		result = append(result, it.Format(hourLayout))
 	}
 	return result
 }

@@ -38,13 +38,13 @@ func NewServer(store *Store) *Server {
 	// Middleware
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(middleware.Timeout(5 * time.Second))
 
 	// Routes
 	r.Get("/", s.index)
 	r.Get("/all", s.getAll)
-	r.Get("/datapoints", s.getDataPoints)
-	//r.Get("/message/totals/{channel-id}", s.getMessageTotals)
+	r.Get("/datapoints/{type}", s.getDataPoints)
+	r.Get("/sum/{type}/{channel-id}", s.getSum)
 
 	s.server = &http.Server{Addr: addr, Handler: r}
 
@@ -70,10 +70,8 @@ func (s *Server) Stop() {
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	response := []Endpoint{
 		{Path: "/", Desc: "this index"},
-		{Path: "/datapoints", Desc: "retrieve raw datapoints from the key value store"},
-		{Path: "/message/totals/{channel-id}", Desc: "total number of messages by user for a channel"},
-		{Path: "/sentiment/positive/{channel-id}", Desc: "total number of positive sentiment messages by user for a channel"},
-		{Path: "/sentiment/negative/{channel-id}", Desc: "total number of negative sentiment messages by user for a channel"},
+		{Path: "/datapoints/{type}", Desc: "raw data points for the specific message type"},
+		{Path: "/sum/{type}/{channel-id}", Desc: "sum the data points by user for a type and channel"},
 	}
 	toJSON(w, response)
 }
@@ -94,10 +92,10 @@ func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the datapoints from the database
+	// Get the data points from the database
 	data, err := s.store.GetDataPoints(
 		timeRange,
-		"messages",
+		chi.URLParam(r, "type"),
 		chi.URLParam(r, "channel-id"))
 
 	if err != nil {
@@ -107,20 +105,25 @@ func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
 	toJSON(w, data)
 }
 
-/*func (s *Server) getMessageTotals(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getSum(w http.ResponseWriter, r *http.Request) {
+	timeRange, err := NewTimeRange(r.FormValue("from"), r.FormValue("to"))
+	if err != nil {
+		abort(w, err, 500)
+		return
+	}
+
 	// aggregate the datapoints by user
 	data, err := s.store.SumByUser(
-		r.FormValue("from"),
-		r.FormValue("to"),
-		chi.URLParam(r, "channel-id"),
-		"messages")
+		timeRange,
+		chi.URLParam(r, "type"),
+		chi.URLParam(r, "channel-id"))
 	if err != nil {
 		abort(w, err, 500)
 		return
 	}
 
 	toJSON(w, data)
-}*/
+}
 
 /*	hour := time.Now().Format(hourLayout)
 	keyPrefix := DpKey(hour, channelID, "messages")

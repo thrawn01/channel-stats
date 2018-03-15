@@ -98,7 +98,7 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 
 			case *slack.MessageEvent:
 				fmt.Printf("Message: %v\n", ev)
-				err := s.store.CountMessage(ev)
+				err := s.store.HandleMessage(ev)
 				if err != nil {
 					fmt.Fprint(os.Stderr, "-- %s\n", err)
 				}
