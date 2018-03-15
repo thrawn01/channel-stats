@@ -21,8 +21,8 @@ type Store struct {
 
 func NewStore() (*Store, error) {
 	opts := badger.DefaultOptions
-	opts.Dir = "./badger"
-	opts.ValueDir = "./badger"
+	opts.Dir = "./badger-db"
+	opts.ValueDir = "./badger-db"
 	opts.SyncWrites = true
 
 	db, err := badger.Open(opts)
