@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+	channelstats.InitLogging(true)
 
 	store, err := channelstats.NewStore()
 	if err != nil {
@@ -18,11 +19,17 @@ func main() {
 	// Close badger so we don't have LOCK errors
 	defer store.Close()
 
+	chanMgr, err := channelstats.NewChannelManager()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "-- %s\n", err)
+		os.Exit(1)
+	}
+
 	// Start the slackbot
-	bot := channelstats.NewSlackBot(store)
+	bot := channelstats.NewSlackBot(store, chanMgr)
 
 	// Start the http server
-	server := channelstats.NewServer(store)
+	server := channelstats.NewServer(store, chanMgr)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -42,5 +49,4 @@ func main() {
 		fmt.Fprintf(os.Stderr, "-- %s\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("-- done")
 }

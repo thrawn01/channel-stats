@@ -3,9 +3,7 @@ package channelstats
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
@@ -14,7 +12,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-const addr = "0.0.0.0:2020"
+const (
+	listenAddr          = "0.0.0.0:2020"
+	missingChannelIDErr = "missing 'channel-id' from request context"
+)
 
 type Endpoint struct {
 	Path string
@@ -22,15 +23,16 @@ type Endpoint struct {
 }
 
 type Server struct {
-	store  *Store
-	server *http.Server
-	wg     sync.WaitGroup
+	chanMgr *ChannelManager
+	wg      sync.WaitGroup
+	server  *http.Server
+	store   *Store
 }
 
-func NewServer(store *Store) *Server {
-	// Server
+func NewServer(store *Store, chanMgr *ChannelManager) *Server {
 	s := &Server{
-		store: store,
+		chanMgr: chanMgr,
+		store:   store,
 	}
 
 	r := chi.NewRouter()
@@ -43,18 +45,22 @@ func NewServer(store *Store) *Server {
 	// Routes
 	r.Get("/", s.index)
 	r.Get("/all", s.getAll)
-	r.Get("/datapoints/{type}", s.getDataPoints)
-	r.Get("/sum/{type}/{channel-id}", s.getSum)
 
-	s.server = &http.Server{Addr: addr, Handler: r}
+	r.Route("/channels/{channel}", func(r chi.Router) {
+		r.Use(s.channelToID)
+		r.Get("/data/{type}", s.getDataPoints)
+		r.Get("/sum/{type}", s.getSum)
+	})
+
+	s.server = &http.Server{Addr: listenAddr, Handler: r}
 
 	// Listen thingy
 	s.wg.Add(1)
 	go func() {
-		fmt.Printf("-- Listening on %s\n", addr)
+		log.Infof("Listening on %s", listenAddr)
 		if err := s.server.ListenAndServe(); err != nil {
 			if err != http.ErrServerClosed {
-				fmt.Fprintf(os.Stderr, "during ListenAndServe(): %s\n", err)
+				log.Errorf("failed to bind to interface '%s': %s", listenAddr, err)
 			}
 		}
 		s.wg.Done()
@@ -70,8 +76,8 @@ func (s *Server) Stop() {
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	response := []Endpoint{
 		{Path: "/", Desc: "this index"},
-		{Path: "/datapoints/{type}", Desc: "raw data points for the specific message type"},
-		{Path: "/sum/{type}/{channel-id}", Desc: "sum the data points by user for a type and channel"},
+		{Path: "/channels/{channel}/data/{type}", Desc: "raw data points for the specific message type"},
+		{Path: "/channels/{channel}/sum/{type}", Desc: "sum the data points by user for a type and channel"},
 	}
 	toJSON(w, response)
 }
@@ -86,9 +92,15 @@ func (s *Server) getAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
+	channelID, ok := r.Context().Value("channel-id").(string)
+	if !ok {
+		abort(w, errors.New(missingChannelIDErr), http.StatusBadRequest)
+		return
+	}
+
 	timeRange, err := NewTimeRange(r.FormValue("from"), r.FormValue("to"))
 	if err != nil {
-		abort(w, err, 500)
+		abort(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -96,61 +108,61 @@ func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
 	data, err := s.store.GetDataPoints(
 		timeRange,
 		chi.URLParam(r, "type"),
-		chi.URLParam(r, "channel-id"))
+		channelID)
 
 	if err != nil {
-		abort(w, err, 500)
+		abort(w, err, http.StatusInternalServerError)
 		return
 	}
 	toJSON(w, data)
 }
 
 func (s *Server) getSum(w http.ResponseWriter, r *http.Request) {
-	timeRange, err := NewTimeRange(r.FormValue("from"), r.FormValue("to"))
-	if err != nil {
-		abort(w, err, 500)
+	channelID, ok := r.Context().Value("channel-id").(string)
+	if !ok {
+		abort(w, errors.New(missingChannelIDErr), http.StatusBadRequest)
 		return
 	}
 
-	// aggregate the datapoints by user
+	timeRange, err := NewTimeRange(r.FormValue("from"), r.FormValue("to"))
+	if err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	// aggregate the data points by user
 	data, err := s.store.SumByUser(
 		timeRange,
 		chi.URLParam(r, "type"),
-		chi.URLParam(r, "channel-id"))
+		channelID)
 	if err != nil {
-		abort(w, err, 500)
+		abort(w, err, http.StatusInternalServerError)
 		return
 	}
-
 	toJSON(w, data)
 }
 
-/*	hour := time.Now().Format(hourLayout)
-	keyPrefix := DpKey(hour, channelID, "messages")
-
-	err := s.db.View(func(txn *badger.Txn) error {
-		it := txn.NewIterator(badger.DefaultIteratorOptions)
-		defer it.Close()
-		for it.Seek(keyPrefix); it.ValidForPrefix(keyPrefix); it.Next() {
-			item := it.Item()
-			k := item.Key()
-			v, err := item.Value()
-			if err != nil {
-				return err
-			}
-			response.Items = append(response.Items, Pair{Key: string(k), Value: string(v)})
+// Convert channel names to channel id and place the result in the request context
+func (s *Server) channelToID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		name := chi.URLParam(r, "channel")
+		if name == "" {
+			abort(w, errors.New("'channel' missing from request"), http.StatusBadRequest)
+			return
 		}
-		return nil
+		id, err := s.chanMgr.GetID(name)
+		if err != nil {
+			abort(w, err, http.StatusBadRequest)
+			return
+		}
+		ctx := context.WithValue(r.Context(), "channel-id", id)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-	if err != nil {
-		abort(w, errors.Wrap(err, "during database view"), 500)
-		return
-	}
-*/
+}
 
 func abort(w http.ResponseWriter, err error, code int) {
-	fmt.Fprint(os.Stderr, "", err)
-	http.Error(w, http.StatusText(500), 500)
+	log.Errorf("HTTP: %s\n", err)
+	http.Error(w, http.StatusText(code), code)
 }
 
 func toJSON(w http.ResponseWriter, obj interface{}) {
