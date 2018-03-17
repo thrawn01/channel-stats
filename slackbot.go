@@ -7,6 +7,7 @@ import (
 
 	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type SlackBot struct {
@@ -14,13 +15,15 @@ type SlackBot struct {
 	rtm     *slack.RTM
 	server  *http.Server
 	chanMgr *ChannelManager
+	log     *logrus.Entry
 	done    chan struct{}
 }
 
 func NewSlackBot(store *Store, chanMgr *ChannelManager) *SlackBot {
 	return &SlackBot{
-		store:   store,
+		log:     log.WithField("prefix", "bot"),
 		chanMgr: chanMgr,
+		store:   store,
 	}
 }
 
@@ -35,7 +38,7 @@ func (s *SlackBot) Start() error {
 			return errors.New("environment variable 'SLACK_TOKEN' empty or missing")
 		}
 
-		log.Info("Opening RTM WebSocket...")
+		s.log.Info("Opening RTM WebSocket...")
 
 		api := slack.New(token)
 		s.rtm = api.NewRTM()
@@ -66,7 +69,7 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 	defer func() {
 		// Gorilla Websockets can panic
 		if r := recover(); r != nil {
-			log.Error("Caught Gorilla WebSocket PANIC, reconnecting")
+			s.log.Error("Caught Gorilla WebSocket PANIC, reconnecting")
 			shouldReconnect = true
 		}
 	}()
@@ -76,18 +79,18 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 		case msg := <-s.rtm.IncomingEvents:
 			switch ev := msg.Data.(type) {
 			case *slack.ConnectedEvent:
-				log.Debugf("Connection counter: %d", ev.ConnectionCount)
+				s.log.Debugf("Connection counter: %d", ev.ConnectionCount)
 			case *slack.ConnectingEvent:
-				log.Info("Connecting via RTM...")
+				s.log.Info("Connecting via RTM...")
 			case *slack.HelloEvent:
-				log.Info("Slack said hello... Connected!")
+				s.log.Info("Slack said hello... Connected!")
 			case *slack.LatencyReport:
-				log.Debugf("Latency Report '%s'", ev.Value)
+				s.log.Debugf("Latency Report '%s'", ev.Value)
 			case *slack.MessageEvent:
-				log.Debugf("Message: %s", ev.Text)
+				s.log.Debugf("Message: %s", ev.Text)
 				err := s.store.HandleMessage(ev)
 				if err != nil {
-					log.Errorf("%s", err)
+					s.log.Errorf("%s", err)
 				}
 
 				/*info := s.rtm.GetInfo()
@@ -97,19 +100,19 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 					s.rtm.SendMessage(s.rtm.NewOutgoingMessage("What's up buddy!?!?", ev.Channel))
 				}*/
 			case *slack.ChannelJoinedEvent, *slack.ChannelRenameEvent:
-				log.Info("Channel Info Updated")
+				s.log.Info("Channel Info Updated")
 				err := s.chanMgr.UpdateChannels()
 				if err != nil {
-					log.Errorf("Error updating channel metadata: %s", err)
+					s.log.Errorf("Error updating channel metadata: %s", err)
 				}
 			case *slack.RTMError:
-				log.Errorf("RTM: %s", ev.Error())
+				s.log.Errorf("RTM: %s", ev.Error())
 
 			case *slack.InvalidAuthEvent:
-				log.Error("RTM reports invalid credentials; disconnecting...")
+				s.log.Error("RTM reports invalid credentials; disconnecting...")
 				return false
 			default:
-				log.Debugf("Event Received: %+v", msg)
+				s.log.Debugf("Event Received: %+v", msg)
 			}
 		case <-s.done:
 			return false
