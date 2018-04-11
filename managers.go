@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type SlackChannelInfo struct {
@@ -22,8 +23,9 @@ type SlackChannelList struct {
 }
 
 type ChannelManager struct {
-	token    string
 	channels map[string]string
+	log      *logrus.Entry
+	token    string
 }
 
 func NewChannelManager() (*ChannelManager, error) {
@@ -32,6 +34,7 @@ func NewChannelManager() (*ChannelManager, error) {
 		return nil, errors.New("environment variable 'SLACK_LEGACY_TOKEN' empty or missing")
 	}
 	s := ChannelManager{
+		log:   log.WithField("prefix", "channel-manager"),
 		token: token,
 	}
 	// Populate our channel listing
@@ -50,7 +53,7 @@ func (s *ChannelManager) fetchListing() (map[string]string, error) {
 	params := url.Values{}
 	params.Add("token", s.token)
 
-	log.Info("Fetching Channel Listing...")
+	s.log.Info("Fetching Channel Listing...")
 	url := fmt.Sprintf("https://slack.com/api/channels.list?%s", params.Encode())
 	resp, err := http.Get(url)
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -27,10 +28,12 @@ type Server struct {
 	wg      sync.WaitGroup
 	server  *http.Server
 	store   *Store
+	log     *logrus.Entry
 }
 
 func NewServer(store *Store, chanMgr *ChannelManager) *Server {
 	s := &Server{
+		log:     log.WithField("prefix", "http"),
 		chanMgr: chanMgr,
 		store:   store,
 	}
@@ -57,7 +60,7 @@ func NewServer(store *Store, chanMgr *ChannelManager) *Server {
 	// Listen thingy
 	s.wg.Add(1)
 	go func() {
-		log.Infof("Listening on %s", listenAddr)
+		s.log.Infof("Listening on %s", listenAddr)
 		if err := s.server.ListenAndServe(); err != nil {
 			if err != http.ErrServerClosed {
 				log.Errorf("failed to bind to interface '%s': %s", listenAddr, err)
@@ -161,7 +164,7 @@ func (s *Server) channelToID(next http.Handler) http.Handler {
 }
 
 func abort(w http.ResponseWriter, err error, code int) {
-	log.Errorf("HTTP: %s\n", err)
+	log.WithField("prefix", "http").Errorf("HTTP: %s\n", err)
 	http.Error(w, http.StatusText(code), code)
 }
 
