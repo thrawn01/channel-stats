@@ -89,6 +89,12 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 				if err != nil {
 					log.Errorf("%s", err)
 				}
+			case *slack.ReactionAddedEvent:
+				log.Debugf("Reaction Added By: %s", ev.ItemUser)
+				err := s.store.HandleReactionAdded(ev)
+				if err != nil {
+					log.Errorf("%s", err)
+				}
 
 				/*info := s.rtm.GetInfo()
 				prefix := fmt.Sprintf("<@%s> ", info.User.ID)
@@ -104,10 +110,11 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 				}
 			case *slack.RTMError:
 				log.Errorf("RTM: %s", ev.Error())
-
 			case *slack.InvalidAuthEvent:
 				log.Error("RTM reports invalid credentials; disconnecting...")
 				return false
+			case *slack.IncomingEventError:
+				log.Errorf("Incoming Error '%+v'; disconnecting...", msg)
 			default:
 				log.Debugf("Event Received: %+v", msg)
 			}

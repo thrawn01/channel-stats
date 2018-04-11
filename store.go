@@ -2,6 +2,7 @@ package channelstats
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +15,9 @@ import (
 )
 
 const hourLayout = "2006-01-02T15"
+
+var linkRegex = regexp.MustCompile(`(http://|https://)`)
+var emojiRegex = regexp.MustCompile(`:([a-z0-9_\+\-]+):`)
 
 type Store struct {
 	db *badger.DB
@@ -168,15 +172,45 @@ func (s *Store) Close() {
 	s.db.Close()
 }
 
-func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
-	float, err := strconv.ParseFloat(ev.Timestamp, 64)
+func (s *Store) FromTimeStamp(text string) (string, error) {
+	float, err := strconv.ParseFloat(text, 64)
 	if err != nil {
-		return errors.Wrapf(err, "timestamp conversion for '%s'", ev.Timestamp)
+		return "", errors.Wrapf(err, "timestamp conversion for '%s'", text)
 	}
 	timestamp := time.Unix(0, int64(float*1000000)*int64(time.Microsecond/time.Nanosecond)).UTC()
+	return timestamp.Format(hourLayout), nil
+}
+
+func (s *Store) HandleReactionAdded(ev *slack.ReactionAddedEvent) error {
+	timeStamp, err := s.FromTimeStamp(ev.EventTimestamp)
+	if err != nil {
+		return errors.Wrap(err, "while handling reaction added")
+	}
+	dp := DataPoint{
+		Hour:      timeStamp,
+		ChannelID: ev.Item.Channel,
+		UserID:    ev.User,
+		Value:     int64(1),
+	}
+
+	return s.db.Update(func(txn *badger.Txn) error {
+		dp.DataType = "emoji"
+		err := saveDataPoint(txn, dp)
+		if err != nil {
+			errors.Wrapf(err, "while storing 'messages' data point")
+		}
+		return nil
+	})
+}
+
+func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
+	timeStamp, err := s.FromTimeStamp(ev.Timestamp)
+	if err != nil {
+		return errors.Wrap(err, "while handling message")
+	}
 
 	dp := DataPoint{
-		Hour:      timestamp.Format(hourLayout),
+		Hour:      timeStamp,
 		ChannelID: ev.Channel,
 		UserID:    ev.User,
 		Value:     int64(1),
@@ -184,12 +218,15 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 
 	// Start a badger transaction
 	return s.db.Update(func(txn *badger.Txn) error {
+
+		// Count Messages
 		dp.DataType = "messages"
 		err := saveDataPoint(txn, dp)
 		if err != nil {
 			errors.Wrapf(err, "while storing 'messages' data point")
 		}
 
+		// Sentiment Analysis
 		result := hc.Analyze(ev.Text)
 		if result.Score > 0 {
 			dp.DataType = "positive"
@@ -205,8 +242,34 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 				errors.Wrapf(err, "while storing 'negative' data point")
 			}
 		}
+
+		// Link counter
+		if HasLink(ev.Text) {
+			dp.DataType = "link"
+			saveDataPoint(txn, dp)
+			if err != nil {
+				errors.Wrapf(err, "while storing 'link' data point")
+			}
+		}
+
+		// Emoji counter
+		if HasEmoji(ev.Text) {
+			dp.DataType = "emoji"
+			saveDataPoint(txn, dp)
+			if err != nil {
+				errors.Wrapf(err, "while storing 'emoji' data point")
+			}
+		}
 		return nil
 	})
+}
+
+func HasLink(text string) bool {
+	return linkRegex.MatchString(text)
+}
+
+func HasEmoji(text string) bool {
+	return emojiRegex.MatchString(text)
 }
 
 func saveDataPoint(txn *badger.Txn, dp DataPoint) error {
