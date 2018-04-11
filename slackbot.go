@@ -11,19 +11,19 @@ import (
 )
 
 type SlackBot struct {
-	store   *Store
-	rtm     *slack.RTM
-	server  *http.Server
-	chanMgr *ChannelManager
-	log     *logrus.Entry
-	done    chan struct{}
+	store  *Store
+	rtm    *slack.RTM
+	server *http.Server
+	idMgr  *IDManager
+	log    *logrus.Entry
+	done   chan struct{}
 }
 
-func NewSlackBot(store *Store, chanMgr *ChannelManager) *SlackBot {
+func NewSlackBot(store *Store, idMgr *IDManager) *SlackBot {
 	return &SlackBot{
-		log:     log.WithField("prefix", "bot"),
-		chanMgr: chanMgr,
-		store:   store,
+		log:   log.WithField("prefix", "bot"),
+		idMgr: idMgr,
+		store: store,
 	}
 }
 
@@ -107,7 +107,7 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 				}*/
 			case *slack.ChannelJoinedEvent, *slack.ChannelRenameEvent:
 				s.log.Info("Channel Info Updated")
-				err := s.chanMgr.UpdateChannels()
+				err := s.idMgr.UpdateChannels()
 				if err != nil {
 					s.log.Errorf("Error updating channel metadata: %s", err)
 				}

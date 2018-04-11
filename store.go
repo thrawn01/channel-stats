@@ -21,12 +21,12 @@ var linkRegex = regexp.MustCompile(`(http://|https://)`)
 var emojiRegex = regexp.MustCompile(`:([a-z0-9_\+\-]+):`)
 
 type Store struct {
-	chanMgr *ChannelManager
-	log     *logrus.Entry
-	db      *badger.DB
+	idMgr *IDManager
+	log   *logrus.Entry
+	db    *badger.DB
 }
 
-func NewStore(chanMgr *ChannelManager) (*Store, error) {
+func NewStore(idMgr *IDManager) (*Store, error) {
 	opts := badger.DefaultOptions
 	opts.Dir = "./badger-db"
 	opts.ValueDir = "./badger-db"
@@ -37,9 +37,9 @@ func NewStore(chanMgr *ChannelManager) (*Store, error) {
 		return nil, errors.Wrap(err, "while opening badger database")
 	}
 	return &Store{
-		log:     log.WithField("prefix", "store"),
-		chanMgr: chanMgr,
-		db:      db,
+		log:   log.WithField("prefix", "store"),
+		idMgr: idMgr,
+		db:    db,
 	}, nil
 }
 
@@ -82,8 +82,9 @@ func (s *DataPoint) PrefixKey() []byte {
 	return []byte(fmt.Sprintf("%s/%s/%s", s.Hour, s.DataType, s.ChannelID))
 }
 
-func (s *DataPoint) ResolveID(chanMgr *ChannelManager) (err error) {
-	s.ChannelName, err = chanMgr.GetName(s.ChannelID)
+func (s *DataPoint) ResolveID(idMgr *IDManager) (err error) {
+	s.ChannelName, err = idMgr.GetChannelName(s.ChannelID)
+	s.UserName, err = idMgr.GetUserName(s.UserID)
 	return err
 }
 
@@ -127,10 +128,10 @@ func (s *Store) SumByUser(timeRange *TimeRange, dataType, channelID string) ([]U
 
 	byUser := make(map[string]int64)
 	for _, dp := range dataPoints {
-		if value, exists := byUser[dp.UserID]; exists {
-			byUser[dp.UserID] = value + dp.Value
+		if value, exists := byUser[dp.UserName]; exists {
+			byUser[dp.UserName] = value + dp.Value
 		} else {
-			byUser[dp.UserID] = dp.Value
+			byUser[dp.UserName] = dp.Value
 		}
 	}
 
@@ -157,7 +158,7 @@ func (s Store) GetByPrefix(keyPrefix []byte) ([]DataPoint, error) {
 			if err != nil {
 				return err
 			}
-			if err = dp.ResolveID(s.chanMgr); err != nil {
+			if err = dp.ResolveID(s.idMgr); err != nil {
 				s.log.Debugf("while resolving data point ids for '%+v': %s", dp, err)
 			}
 			results = append(results, dp)
@@ -179,7 +180,7 @@ func (s *Store) GetAll() ([]DataPoint, error) {
 			if err != nil {
 				return err
 			}
-			if err = dp.ResolveID(s.chanMgr); err != nil {
+			if err = dp.ResolveID(s.idMgr); err != nil {
 				s.log.Debugf("while resolving data point ids for '%+v': %s", dp, err)
 			}
 			results = append(results, dp)

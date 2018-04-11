@@ -11,13 +11,13 @@ import (
 func main() {
 	channelstats.InitLogging(true)
 
-	chanMgr, err := channelstats.NewChannelManager()
+	idMgr, err := channelstats.NewIdManager()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "-- %s\n", err)
 		os.Exit(1)
 	}
 
-	store, err := channelstats.NewStore(chanMgr)
+	store, err := channelstats.NewStore(idMgr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "-- %s\n", err)
 		os.Exit(1)
@@ -26,10 +26,10 @@ func main() {
 	defer store.Close()
 
 	// Start the slackbot
-	bot := channelstats.NewSlackBot(store, chanMgr)
+	bot := channelstats.NewSlackBot(store, idMgr)
 
 	// Start the http server
-	server := channelstats.NewServer(store, chanMgr)
+	server := channelstats.NewServer(store, idMgr)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)

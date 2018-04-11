@@ -24,18 +24,18 @@ type Endpoint struct {
 }
 
 type Server struct {
-	chanMgr *ChannelManager
-	wg      sync.WaitGroup
-	server  *http.Server
-	store   *Store
-	log     *logrus.Entry
+	idMgr  *IDManager
+	wg     sync.WaitGroup
+	server *http.Server
+	store  *Store
+	log    *logrus.Entry
 }
 
-func NewServer(store *Store, chanMgr *ChannelManager) *Server {
+func NewServer(store *Store, idMgr *IDManager) *Server {
 	s := &Server{
-		log:     log.WithField("prefix", "http"),
-		chanMgr: chanMgr,
-		store:   store,
+		log:   log.WithField("prefix", "http"),
+		idMgr: idMgr,
+		store: store,
 	}
 
 	r := chi.NewRouter()
@@ -153,7 +153,7 @@ func (s *Server) channelToID(next http.Handler) http.Handler {
 			abort(w, errors.New("'channel' missing from request"), http.StatusBadRequest)
 			return
 		}
-		id, err := s.chanMgr.GetID(name)
+		id, err := s.idMgr.GetChannelID(name)
 		if err != nil {
 			abort(w, err, http.StatusBadRequest)
 			return
