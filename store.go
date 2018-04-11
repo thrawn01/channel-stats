@@ -12,6 +12,7 @@ import (
 	"github.com/dgraph-io/badger"
 	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 const hourLayout = "2006-01-02T15"
@@ -20,10 +21,12 @@ var linkRegex = regexp.MustCompile(`(http://|https://)`)
 var emojiRegex = regexp.MustCompile(`:([a-z0-9_\+\-]+):`)
 
 type Store struct {
-	db *badger.DB
+	chanMgr *ChannelManager
+	log     *logrus.Entry
+	db      *badger.DB
 }
 
-func NewStore() (*Store, error) {
+func NewStore(chanMgr *ChannelManager) (*Store, error) {
 	opts := badger.DefaultOptions
 	opts.Dir = "./badger-db"
 	opts.ValueDir = "./badger-db"
@@ -33,15 +36,21 @@ func NewStore() (*Store, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "while opening badger database")
 	}
-	return &Store{db: db}, nil
+	return &Store{
+		log:     log.WithField("prefix", "store"),
+		chanMgr: chanMgr,
+		db:      db,
+	}, nil
 }
 
 type DataPoint struct {
-	Hour      string
-	UserID    string
-	ChannelID string
-	DataType  string
-	Value     int64
+	Hour        string
+	UserID      string
+	UserName    string
+	ChannelID   string
+	ChannelName string
+	DataType    string
+	Value       int64
 }
 
 func DataPointFrom(item *badger.Item) (DataPoint, error) {
@@ -65,15 +74,20 @@ func DataPointFrom(item *badger.Item) (DataPoint, error) {
 	}, nil
 }
 
-func (s DataPoint) Key() []byte {
+func (s *DataPoint) Key() []byte {
 	return []byte(fmt.Sprintf("%s/%s/%s/%s", s.Hour, s.DataType, s.ChannelID, s.UserID))
 }
 
-func (s DataPoint) PrefixKey() []byte {
+func (s *DataPoint) PrefixKey() []byte {
 	return []byte(fmt.Sprintf("%s/%s/%s", s.Hour, s.DataType, s.ChannelID))
 }
 
-func (s DataPoint) EncodeValue() []byte {
+func (s *DataPoint) ResolveID(chanMgr *ChannelManager) (err error) {
+	s.ChannelName, err = chanMgr.GetName(s.ChannelID)
+	return err
+}
+
+func (s *DataPoint) EncodeValue() []byte {
 	//buf := make([]byte, binary.MaxVarintLen64)
 	//n := binary.PutVarint(buf, s.Value)
 	//return buf[:n]
@@ -81,6 +95,7 @@ func (s DataPoint) EncodeValue() []byte {
 }
 
 func (s *Store) GetDataPoints(timeRange *TimeRange, dataType, channelID string) ([]DataPoint, error) {
+	s.log.Debugf("GetDataPoints(%+v, %s, %s)", *timeRange, dataType, channelID)
 	var results []DataPoint
 
 	for _, hour := range timeRange.ByHour() {
@@ -142,6 +157,9 @@ func (s Store) GetByPrefix(keyPrefix []byte) ([]DataPoint, error) {
 			if err != nil {
 				return err
 			}
+			if err = dp.ResolveID(s.chanMgr); err != nil {
+				s.log.Debugf("while resolving data point ids for '%+v': %s", dp, err)
+			}
 			results = append(results, dp)
 		}
 		return nil
@@ -160,6 +178,9 @@ func (s *Store) GetAll() ([]DataPoint, error) {
 			dp, err := DataPointFrom(it.Item())
 			if err != nil {
 				return err
+			}
+			if err = dp.ResolveID(s.chanMgr); err != nil {
+				s.log.Debugf("while resolving data point ids for '%+v': %s", dp, err)
 			}
 			results = append(results, dp)
 		}

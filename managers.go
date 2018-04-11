@@ -23,9 +23,10 @@ type SlackChannelList struct {
 }
 
 type ChannelManager struct {
-	channels map[string]string
-	log      *logrus.Entry
-	token    string
+	byName map[string]string
+	byID   map[string]string
+	log    *logrus.Entry
+	token  string
 }
 
 func NewChannelManager() (*ChannelManager, error) {
@@ -41,15 +42,11 @@ func NewChannelManager() (*ChannelManager, error) {
 	return &s, s.UpdateChannels()
 }
 
-func (s *ChannelManager) UpdateChannels() (err error) {
-	s.channels, err = s.fetchListing()
-	if err != nil {
-		return err
-	}
-	return nil
+func (s *ChannelManager) UpdateChannels() error {
+	return s.fetchListing()
 }
 
-func (s *ChannelManager) fetchListing() (map[string]string, error) {
+func (s *ChannelManager) fetchListing() error {
 	params := url.Values{}
 	params.Add("token", s.token)
 
@@ -57,7 +54,7 @@ func (s *ChannelManager) fetchListing() (map[string]string, error) {
 	url := fmt.Sprintf("https://slack.com/api/channels.list?%s", params.Encode())
 	resp, err := http.Get(url)
 	if err != nil {
-		return nil, errors.Wrapf(err, "GET '%s' failed with '%d'", url, resp.StatusCode)
+		return errors.Wrapf(err, "GET '%s' failed with '%d'", url, resp.StatusCode)
 	}
 	defer resp.Body.Close()
 
@@ -65,26 +62,36 @@ func (s *ChannelManager) fetchListing() (map[string]string, error) {
 	var channelList SlackChannelList
 	err = json.NewDecoder(resp.Body).Decode(&channelList)
 	if err != nil {
-		return nil, errors.Wrap(err, "GET '%s' failed during json decode")
+		return errors.Wrap(err, "GET '%s' failed during json decode")
 	}
 
 	// Handle slack error
 	if !channelList.Ok {
-		return nil, errors.Errorf("GET '%s' failed with slack error '%s'", channelList.Error)
+		return errors.Errorf("GET '%s' failed with slack error '%s'", channelList.Error)
 	}
 
 	// Extract channel name and id's
-	results := make(map[string]string, len(channelList.Channels))
+	s.byName = make(map[string]string, len(channelList.Channels))
+	s.byID = make(map[string]string, len(channelList.Channels))
 	for _, channel := range channelList.Channels {
-		results[channel.Name] = channel.Id
+		s.log.Debugf("Found Channel: %s - %s", channel.Name, channel.Id)
+		s.byName[channel.Name] = channel.Id
+		s.byID[channel.Id] = channel.Name
 	}
 
-	return results, nil
+	return nil
 }
 
 func (s *ChannelManager) GetID(name string) (string, error) {
-	if id, exists := s.channels[name]; exists {
+	if id, exists := s.byName[name]; exists {
 		return id, nil
 	}
-	return "", errors.Errorf("channel '%s' not found")
+	return "(unknown)", errors.Errorf("channel '%s' not found", name)
+}
+
+func (s *ChannelManager) GetName(id string) (string, error) {
+	if id, exists := s.byID[id]; exists {
+		return id, nil
+	}
+	return "(unknown)", errors.Errorf("channel id '%s' not found", id)
 }

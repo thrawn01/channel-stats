@@ -30,14 +30,15 @@ func NewTimeRange(start, end string) (*TimeRange, error) {
 		}
 	}
 
-	// If no end time specified, choose now
-	if endTime.IsZero() {
-		endTime = time.Now()
-	}
-
+	now := time.Now()
 	// If no start time specified, choose 1 week (aka 7 days)
 	if startTime.IsZero() {
-		startTime = time.Now().AddDate(0, 0, -7)
+		startTime = now.AddDate(0, 0, -7)
+	}
+
+	// If no end time specified, choose now
+	if endTime.IsZero() {
+		endTime = now
 	}
 
 	if endTime.Before(startTime) {
