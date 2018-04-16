@@ -87,7 +87,8 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 			case *slack.LatencyReport:
 				s.log.Debugf("Latency Report '%s'", ev.Value)
 			case *slack.MessageEvent:
-				s.log.Debugf("Message: %s", ev.Text)
+				userName, _ := s.idMgr.GetUserName(ev.User)
+				s.log.Debugf("Message: [%s] %s", userName, ev.Text)
 				err := s.store.HandleMessage(ev)
 				if err != nil {
 					s.log.Errorf("%s", err)
