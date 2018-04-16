@@ -118,6 +118,7 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 				return false
 			case *slack.IncomingEventError:
 				log.Errorf("Incoming Error '%+v'; disconnecting...", msg)
+				return true
 			default:
 				s.log.Debugf("Event Received: %+v", msg)
 			}
