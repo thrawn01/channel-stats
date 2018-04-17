@@ -92,7 +92,7 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 			case *slack.MessageEvent:
 				userName, err := s.idMgr.GetUserName(ev.User)
 				if err != nil {
-					s.log.Error("Unknown user message: %+v", ev)
+					s.log.Debug("Unknown user message: %+v", ev)
 					continue
 				}
 
