@@ -99,7 +99,7 @@
   branch = "master"
   name = "github.com/sirupsen/logrus"
   packages = ["."]
-  revision = "90150a8ed11b6ce285e77e8af2b0109559ce4777"
+  revision = "778f2e774c725116edbc3d039dc0dfc1cc62aae8"
 
 [[projects]]
   branch = "master"
@@ -109,7 +109,7 @@
     "require",
     "suite"
   ]
-  revision = "b89eecf5ca5db6d3ba60b237ffe3df7bafb7662f"
+  revision = "c679ae2cc0cb27ec3293fea7e254e47386f05d69"
 
 [[projects]]
   name = "github.com/x-cray/logrus-prefixed-formatter"
@@ -121,7 +121,7 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "374053ea96cb300f8671b8d3b07edeeb06e203b4"
+  revision = "d6449816ce06963d9d136eee5a56fca5b0616e7e"
 
 [[projects]]
   branch = "master"
@@ -131,7 +131,7 @@
     "internal/timeseries",
     "trace"
   ]
-  revision = "e0c57d8f86c17f0724497efcb3bc617e82834821"
+  revision = "8d16fa6dc9a85c1cd3ed24ad08ff21cf94f10888"
 
 [[projects]]
   branch = "master"
@@ -140,7 +140,7 @@
     "unix",
     "windows"
   ]
-  revision = "2f1e207ee39ff70f3433e49c6eb52677a515e3b5"
+  revision = "b126b21c05a91c856b027c16779c12e3bf236954"
 
 [solve-meta]
   analyzer-name = "dep"
