@@ -5,6 +5,8 @@ import (
 	"os"
 	"sync"
 
+	"runtime/debug"
+
 	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -70,6 +72,7 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 		// Gorilla Websockets can panic
 		if r := recover(); r != nil {
 			s.log.Error("Caught Gorilla WebSocket PANIC, reconnecting")
+			debug.PrintStack()
 			shouldReconnect = true
 		}
 	}()
