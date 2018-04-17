@@ -231,6 +231,11 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 		return errors.Wrap(err, "while handling message")
 	}
 
+	// Silently ignore empty messages
+	if len(ev.Text) == 0 {
+		return nil
+	}
+
 	dp := DataPoint{
 		Hour:      timeStamp,
 		ChannelID: ev.Channel,

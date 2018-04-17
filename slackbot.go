@@ -71,7 +71,7 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 	defer func() {
 		// Gorilla Websockets can panic
 		if r := recover(); r != nil {
-			s.log.Error("Caught Gorilla WebSocket PANIC, reconnecting")
+			s.log.Error("Caught PANIC, reconnecting")
 			debug.PrintStack()
 			shouldReconnect = true
 		}
@@ -90,9 +90,14 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 			case *slack.LatencyReport:
 				s.log.Debugf("Latency Report '%s'", ev.Value)
 			case *slack.MessageEvent:
-				userName, _ := s.idMgr.GetUserName(ev.User)
+				userName, err := s.idMgr.GetUserName(ev.User)
+				if err != nil {
+					s.log.Error("Unknown user message: %+v", ev)
+					continue
+				}
+
 				s.log.Debugf("Message: [%s] %s", userName, ev.Text)
-				err := s.store.HandleMessage(ev)
+				err = s.store.HandleMessage(ev)
 				if err != nil {
 					s.log.Errorf("%s", err)
 				}
