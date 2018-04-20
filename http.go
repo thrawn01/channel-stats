@@ -168,7 +168,7 @@ func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	timeRange, err := NewTimeRange(r.FormValue("from"), r.FormValue("to"))
+	timeRange, err := NewTimeRange(r.FormValue("start"), r.FormValue("end"))
 	if err != nil {
 		abort(w, err, http.StatusBadRequest)
 		return
@@ -194,7 +194,7 @@ func (s *Server) getSum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	timeRange, err := NewTimeRange(r.FormValue("from"), r.FormValue("to"))
+	timeRange, err := NewTimeRange(r.FormValue("start"), r.FormValue("end"))
 	if err != nil {
 		abort(w, err, http.StatusBadRequest)
 		return

@@ -15,8 +15,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-const hourLayout = "2006-01-02T15"
-
 var linkRegex = regexp.MustCompile(`(http://|https://)`)
 var emojiRegex = regexp.MustCompile(`:([a-z0-9_\+\-]+):`)
 
@@ -194,22 +192,22 @@ func (s *Store) Close() {
 	s.db.Close()
 }
 
-func (s *Store) FromTimeStamp(text string) (string, error) {
+func (s *Store) HourFromTimeStamp(text string) (string, error) {
 	float, err := strconv.ParseFloat(text, 64)
 	if err != nil {
 		return "", errors.Wrapf(err, "timestamp conversion for '%s'", text)
 	}
 	timestamp := time.Unix(0, int64(float*1000000)*int64(time.Microsecond/time.Nanosecond)).UTC()
-	return timestamp.Format(hourLayout), nil
+	return timestamp.Format(RFC3339Short), nil
 }
 
 func (s *Store) HandleReactionAdded(ev *slack.ReactionAddedEvent) error {
-	timeStamp, err := s.FromTimeStamp(ev.EventTimestamp)
+	hour, err := s.HourFromTimeStamp(ev.EventTimestamp)
 	if err != nil {
 		return errors.Wrap(err, "while handling reaction added")
 	}
 	dp := DataPoint{
-		Hour:      timeStamp,
+		Hour:      hour,
 		ChannelID: ev.Item.Channel,
 		UserID:    ev.User,
 		Value:     int64(1),
@@ -226,7 +224,7 @@ func (s *Store) HandleReactionAdded(ev *slack.ReactionAddedEvent) error {
 }
 
 func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
-	timeStamp, err := s.FromTimeStamp(ev.Timestamp)
+	hour, err := s.HourFromTimeStamp(ev.Timestamp)
 	if err != nil {
 		return errors.Wrap(err, "while handling message")
 	}
@@ -237,7 +235,7 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 	}
 
 	dp := DataPoint{
-		Hour:      timeStamp,
+		Hour:      hour,
 		ChannelID: ev.Channel,
 		UserID:    ev.User,
 		Value:     int64(1),

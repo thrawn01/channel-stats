@@ -12,21 +12,25 @@ type TimeRange struct {
 	End   time.Time
 }
 
+const RFC3339Short = "2006-01-02T15"
+
 func NewTimeRange(start, end string) (*TimeRange, error) {
 	var startTime, endTime time.Time
 	var err error
 
 	if len(start) != 0 {
-		startTime, err = time.Parse(time.RFC1123, start)
+		startTime, err = time.Parse(RFC3339Short, start)
 		if err != nil {
-			return nil, errors.Wrap(err, "'start' is not valid 'RFC1123 time string")
+			return nil, errors.Wrapf(err,
+				"'start' is not in the format '%s'", RFC3339Short)
 		}
 	}
 
 	if len(end) != 0 {
-		endTime, err = time.Parse(time.RFC1123, end)
+		endTime, err = time.Parse(RFC3339Short, end)
 		if err != nil {
-			return nil, errors.Wrap(err, "'end' is not valid 'RFC1123 time string")
+			return nil, errors.Wrapf(err,
+				"'end' is not in the format '%s'", RFC3339Short)
 		}
 	}
 
@@ -53,14 +57,14 @@ func NewTimeRange(start, end string) (*TimeRange, error) {
 
 func (s *TimeRange) ByHour() []string {
 	var result []string
-	result = append(result, s.Start.Format(hourLayout))
+	result = append(result, s.Start.Format(RFC3339Short))
 	it := s.Start
 	for {
 		it = it.Add(time.Hour)
 		if it.After(s.End) {
 			break
 		}
-		result = append(result, it.Format(hourLayout))
+		result = append(result, it.Format(RFC3339Short))
 	}
 	return result
 }
