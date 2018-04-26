@@ -285,8 +285,42 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 				errors.Wrapf(err, "while storing 'emoji' data point")
 			}
 		}
+
+		// Count words
+		count := CountWords(ev.Text)
+		dp.DataType = "word-count"
+		dp.Value = count
+		saveDataPoint(txn, dp)
+		if err != nil {
+			errors.Wrapf(err, "while storing 'word-count' data point")
+		}
+
 		return nil
 	})
+}
+
+const (
+	OUT = 0
+	IN  = 1
+)
+
+func CountWords(text string) int64 {
+	state := OUT
+	var wc int64
+
+	// Scan all characters one by one
+	for i := 0; i < len(text); i++ {
+		// If next character is a separator, set the state as OUT
+		if text[i] == ' ' || text[i] == '\n' || text[i] == '\t' {
+			state = OUT
+		} else if state == OUT {
+			// If next character is not a word separator and state is OUT,
+			// then set the state as IN and increment word count
+			state = IN
+			wc += 1
+		}
+	}
+	return wc
 }
 
 func HasLink(text string) bool {
