@@ -124,15 +124,16 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 				s.log.Errorf("RTM: %s", ev.Error())
 			case *slack.InvalidAuthEvent:
 				s.log.Error("RTM reports invalid credentials; disconnecting...")
-				return false
+				return
 			case *slack.IncomingEventError:
 				log.Errorf("Incoming Error '%+v'; disconnecting...", msg)
-				return true
+				shouldReconnect = true
+				return
 			default:
 				s.log.Debugf("Event Received: %+v", msg)
 			}
 		case <-s.done:
-			return false
+			return
 		}
 	}
 }
