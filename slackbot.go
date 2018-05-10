@@ -1,11 +1,11 @@
 package channelstats
 
 import (
+	"fmt"
 	"net/http"
 	"os"
-	"sync"
-
 	"runtime/debug"
+	"sync"
 
 	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
@@ -71,7 +71,7 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 	defer func() {
 		// Gorilla Websockets can panic
 		if r := recover(); r != nil {
-			s.log.Error("Caught PANIC, reconnecting")
+			fmt.Printf("Caught PANIC in handleEvents(), reconnecting\n")
 			debug.PrintStack()
 			shouldReconnect = true
 		}

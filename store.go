@@ -3,6 +3,7 @@ package channelstats
 import (
 	"fmt"
 	"regexp"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,6 +14,11 @@ import (
 	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+)
+
+const (
+	OUT = 0
+	IN  = 1
 )
 
 var linkRegex = regexp.MustCompile(`(http://|https://)`)
@@ -243,7 +249,6 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 
 	// Start a badger transaction
 	return s.db.Update(func(txn *badger.Txn) error {
-
 		// Count Messages
 		dp.DataType = "messages"
 		err := saveDataPoint(txn, dp)
@@ -251,8 +256,7 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 			errors.Wrapf(err, "while storing 'messages' data point")
 		}
 
-		// Sentiment Analysis
-		result := hc.Analyze(ev.Text)
+		result := SentimentAnalysis(ev.Text)
 		if result.Score > 0 {
 			dp.DataType = "positive"
 			err = saveDataPoint(txn, dp)
@@ -299,10 +303,18 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 	})
 }
 
-const (
-	OUT = 0
-	IN  = 1
-)
+func SentimentAnalysis(message string) (score hc.FullScore) {
+	defer func() {
+		// Sentiment Analysis Panics often....
+		if r := recover(); r != nil {
+			fmt.Printf("-- Caught PANIC in SentimentAnalysis()")
+			debug.PrintStack()
+			score = hc.FullScore{}
+		}
+	}()
+	score = hc.Analyze(message)
+	return
+}
 
 func CountWords(text string) int64 {
 	state := OUT
