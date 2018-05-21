@@ -49,14 +49,17 @@ func (s *SlackBot) Start() error {
 		go func() {
 			s.rtm.ManageConnection()
 			wg.Done()
+			log.Debug("ManageConnection() done")
 		}()
 
 		// Return true if we wish to reconnect
 		if s.handleEvents() {
+			log.Debug("Reconnecting...")
 			s.rtm.Disconnect()
 			wg.Wait()
 			continue
 		}
+		log.Debug("Disconnecting...")
 		wg.Wait()
 		return nil
 	}
@@ -128,7 +131,7 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 			case *slack.IncomingEventError:
 				log.Errorf("Incoming Error '%+v'; disconnecting...", msg)
 				shouldReconnect = true
-				return
+				return true
 			default:
 				s.log.Debugf("Event Received: %+v", msg)
 			}
