@@ -7,31 +7,66 @@ import (
 	"runtime/debug"
 	"sync"
 
+	"sync/atomic"
+	"time"
+
 	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 type SlackBot struct {
-	store  *Store
-	rtm    *slack.RTM
-	server *http.Server
-	idMgr  *IDManager
-	log    *logrus.Entry
-	done   chan struct{}
+	log      *logrus.Entry
+	done     chan struct{}
+	server   *http.Server
+	rtm      *slack.RTM
+	idMgr    *IDManager
+	notifier Notifier
+	store    *Store
 }
 
-func NewSlackBot(store *Store, idMgr *IDManager) *SlackBot {
+func NewSlackBot(store *Store, idMgr *IDManager, notifier Notifier) *SlackBot {
 	return &SlackBot{
-		log:   log.WithField("prefix", "bot"),
-		idMgr: idMgr,
-		store: store,
+		log:      log.WithField("prefix", "bot"),
+		notifier: notifier,
+		idMgr:    idMgr,
+		store:    store,
 	}
 }
 
 func (s *SlackBot) Start() error {
 	s.done = make(chan struct{})
 	var wg sync.WaitGroup
+	var connected int32
+
+	go func() {
+		ticker := time.Tick(time.Second * 30)
+		var disconnected bool
+
+		// TODO: Shut this down gracefully
+		for {
+			select {
+			case <-ticker:
+				if disconnected {
+					// If we are still disconnected
+					if atomic.LoadInt32(&connected) == 0 {
+						err := s.notifier.Send("channel-stats has been disconnected from " +
+							"slack for more than 30 seconds")
+						if err != nil {
+							s.log.Errorf("while sending notification - %s", err)
+						}
+					}
+				}
+
+				// If we are disconnected, Wait another 30 seconds
+				if atomic.LoadInt32(&connected) == 0 {
+					disconnected = true
+				} else {
+					disconnected = false
+				}
+			}
+		}
+	}()
 
 	// In a for loop because poorly written gorilla garbage panics occasionally
 	for {
@@ -41,6 +76,7 @@ func (s *SlackBot) Start() error {
 		}
 
 		s.log.Info("Opening RTM WebSocket...")
+		atomic.StoreInt32(&connected, 1)
 
 		api := slack.New(token)
 		s.rtm = api.NewRTM()
@@ -54,11 +90,13 @@ func (s *SlackBot) Start() error {
 
 		// Return true if we wish to reconnect
 		if s.handleEvents() {
+			atomic.StoreInt32(&connected, 0)
 			log.Debug("Reconnecting...")
 			s.rtm.Disconnect()
 			wg.Wait()
 			continue
 		}
+		atomic.StoreInt32(&connected, 0)
 		log.Debug("Disconnecting...")
 		wg.Wait()
 		return nil

@@ -5,11 +5,25 @@ import (
 	"os"
 	"os/signal"
 
+	"time"
+
 	"github.com/thrawn01/channel-stats"
 )
 
 func main() {
 	channelstats.InitLogging(true)
+
+	notifier, err := channelstats.NewNotifier()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "-- %s\n", err)
+		os.Exit(1)
+	}
+
+	err = notifier.Send(fmt.Sprintf("[channel-stats] Started @ %s", time.Now()))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "-- %s\n", err)
+		os.Exit(1)
+	}
 
 	idMgr, err := channelstats.NewIdManager()
 	if err != nil {
@@ -26,7 +40,7 @@ func main() {
 	defer store.Close()
 
 	// Start the slackbot
-	bot := channelstats.NewSlackBot(store, idMgr)
+	bot := channelstats.NewSlackBot(store, idMgr, notifier)
 
 	// Start the http server
 	server := channelstats.NewServer(store, idMgr)
