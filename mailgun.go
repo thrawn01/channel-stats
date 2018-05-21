@@ -29,6 +29,9 @@ func NewNotifier() (Notifier, error) {
 		return nil, err
 	}
 
+	// TODO: Remove once we fix this upstream
+	mg.SetAPIBase("https://api.mailgun.net/v3")
+
 	recipient := os.Getenv("MG_RECIPIENT")
 	if recipient == "" {
 		return nil, errors.New("env variable 'MG_RECIPIENT' must be defined " +
