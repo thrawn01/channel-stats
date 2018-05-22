@@ -42,6 +42,7 @@ func (s *SlackBot) Start() error {
 	go func() {
 		ticker := time.Tick(time.Second * 30)
 		var disconnected bool
+		var notified bool
 
 		// TODO: Shut this down gracefully
 		for {
@@ -50,11 +51,18 @@ func (s *SlackBot) Start() error {
 				if disconnected {
 					// If we are still disconnected
 					if atomic.LoadInt32(&connected) == 0 {
+						// Only notify once
+						if notified {
+							continue
+						}
+
 						err := s.notifier.Send("channel-stats has been disconnected from " +
 							"slack for more than 30 seconds")
 						if err != nil {
 							s.log.Errorf("while sending notification - %s", err)
+							continue
 						}
+						notified = true
 					}
 				}
 
@@ -63,6 +71,7 @@ func (s *SlackBot) Start() error {
 					disconnected = true
 				} else {
 					disconnected = false
+					notified = false
 				}
 			}
 		}
@@ -93,6 +102,7 @@ func (s *SlackBot) Start() error {
 			atomic.StoreInt32(&connected, 0)
 			log.Debug("Reconnecting...")
 			s.rtm.Disconnect()
+			log.Debug("Waiting...")
 			wg.Wait()
 			continue
 		}
@@ -167,9 +177,13 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 				s.log.Error("RTM reports invalid credentials; disconnecting...")
 				return
 			case *slack.IncomingEventError:
-				log.Errorf("Incoming Error '%+v'; disconnecting...", msg)
-				shouldReconnect = true
-				return true
+				log.Errorf("Incoming Error '%+v'", msg)
+				//shouldReconnect = true
+				//return true
+			case *slack.DisconnectedEvent:
+				log.Errorf("Disconnected...", msg)
+				//shouldReconnect = true
+				//return true
 			default:
 				s.log.Debugf("Event Received: %+v", msg)
 			}
