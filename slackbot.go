@@ -102,7 +102,6 @@ func (s *SlackBot) Start() error {
 			atomic.StoreInt32(&connected, 0)
 			log.Debug("Reconnecting...")
 			s.rtm.Disconnect()
-			log.Debug("Waiting...")
 			wg.Wait()
 			continue
 		}
