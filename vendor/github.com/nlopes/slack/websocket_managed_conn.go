@@ -59,10 +59,8 @@ func (rtm *RTM) ManageConnection() {
 		// after being disconnected we need to check if it was intentional
 		// if not then we should try to reconnect
 		if rtm.wasIntentional {
-			fmt.Println("was intentional")
 			return
 		}
-		fmt.Println("was not intentional")
 		// else continue and run the loop again to connect
 	}
 }
@@ -166,16 +164,13 @@ func (rtm *RTM) startRTMAndDial(useRTMStart bool) (*Info, *websocket.Conn, error
 // intentional, false otherwise) should be sent to the killChannel on the RTM.
 func (rtm *RTM) killConnection(keepRunning chan bool, intentional bool) error {
 	rtm.Debugln("killing connection")
-	fmt.Println("killing connection")
 	if rtm.isConnected {
 		close(keepRunning)
 	}
 	rtm.isConnected = false
 	rtm.wasIntentional = intentional
 	err := rtm.conn.Close()
-	fmt.Println("Emit disconnected event")
 	rtm.IncomingEvents <- RTMEvent{"disconnected", &DisconnectedEvent{intentional}}
-	fmt.Println("After Emit disconnected event")
 	return err
 }
 

@@ -3,15 +3,9 @@ package channelstats
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"mime"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sync"
 	"time"
-
-	"fmt"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -26,9 +20,31 @@ const (
 	staticPath          = "html/"
 )
 
-type Endpoint struct {
-	Path string
-	Desc string
+type ParamDoc struct {
+	Param string
+	Desc  string
+}
+
+type EndpointDoc struct {
+	Path   string
+	Desc   string
+	Params []ParamDoc
+}
+
+type CounterDoc struct {
+	Counter string
+	Desc    string
+}
+
+type DocResponse struct {
+	Endpoints []EndpointDoc
+	Counters  []CounterDoc
+}
+
+type ItemResponse struct {
+	StartHour string      `json:"start-hour"`
+	EndHour   string      `json:"end-hour"`
+	Items     interface{} `json:"items"`
 }
 
 type Server struct {
@@ -63,11 +79,11 @@ func NewServer(store *Store, idMgr *IDManager) *Server {
 	// API routes
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/all", s.getAll)
-		r.Get("/", s.api)
+		r.Get("/", s.doc)
 		r.Route("/channels/{channel}", func(r chi.Router) {
 			r.Use(s.channelToID)
-			r.Get("/data/{type}", s.getDataPoints)
-			r.Get("/sum/{type}", s.getSum)
+			r.Get("/data/{counter}", s.getDataPoints)
+			r.Get("/sum/{counter}", s.getSum)
 		})
 	})
 
@@ -92,64 +108,37 @@ func (s *Server) Stop() {
 	s.wg.Wait()
 }
 
-func (s *Server) serveFiles(w http.ResponseWriter, r *http.Request) {
-	file := chi.URLParam(r, "*")
-	if file == "" {
-		abort(w, errors.New("'*' param missing from request"), http.StatusBadRequest)
-		return
+func (s *Server) doc(w http.ResponseWriter, r *http.Request) {
+	resp := DocResponse{
+		Endpoints: []EndpointDoc{
+			{Path: "/api", Desc: "this index"},
+			{
+				Path: "/api/channels/{channel}/data/{counter}",
+				Desc: "raw data points for the specific message counter",
+				Params: []ParamDoc{
+					{Param: "start-hour", Desc: "retrieve counters starting at this hour"},
+					{Param: "end-hour", Desc: "retrieve counters ending at this hour"},
+				},
+			},
+			{
+				Path: "/api/channels/{channel}/sum/{counter}",
+				Desc: "sum the data points by user for a counter and channel",
+				Params: []ParamDoc{
+					{Param: "start-hour", Desc: "retrieve counters starting at this hour"},
+					{Param: "end-hour", Desc: "retrieve counters ending at this hour"},
+				},
+			},
+		},
+		Counters: []CounterDoc{
+			{Counter: "messages", Desc: "The number of messages seen in channel"},
+			{Counter: "positive", Desc: "The number of messages that had positive sentiment seen in channel"},
+			{Counter: "negative", Desc: "The number of messages that had negative sentiment seen in channel"},
+			{Counter: "link", Desc: "The number of messages that contain an http link"},
+			{Counter: "emoji", Desc: "The number of messages that contain an emoji link"},
+			{Counter: "word-count", Desc: "The number of words counted in the channel"},
+		},
 	}
-
-	path := fmt.Sprintf("%s%s", staticPath, file)
-	ext := filepath.Ext(path)
-
-	// Ignore chrome .map files
-	if ext == ".map" {
-		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-		return
-	}
-
-	// Determine our content type by file extension
-	ctype := mime.TypeByExtension(filepath.Ext(path))
-	if ctype == "" {
-		s.log.Debug("Unable to determine mime type for ", path)
-		w.Header().Set("Content-Type", "text/html")
-	} else {
-		w.Header().Set("Content-Type", ctype)
-	}
-
-	// Open the requested file
-	fd, err := os.Open(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-			return
-		}
-		if os.IsPermission(err) {
-			abort(w, err, http.StatusForbidden)
-			return
-		}
-		abort(w, err, http.StatusInternalServerError)
-		return
-	}
-	defer fd.Close()
-
-	// Write the entire file back to the client
-	io.Copy(w, fd)
-}
-
-func (s *Server) redirectUI(resp http.ResponseWriter, req *http.Request) {
-	s.log.Debug("Redirect to '/ui/index.html'")
-	resp.Header().Set("Location", "/ui/index.html")
-	resp.WriteHeader(http.StatusMovedPermanently)
-}
-
-func (s *Server) api(w http.ResponseWriter, r *http.Request) {
-	response := []Endpoint{
-		{Path: "/api", Desc: "this index"},
-		{Path: "/api/channels/{channel}/data/{type}", Desc: "raw data points for the specific message type"},
-		{Path: "/api/channels/{channel}/sum/{type}", Desc: "sum the data points by user for a type and channel"},
-	}
-	toJSON(w, response)
+	toJSON(w, resp)
 }
 
 func (s *Server) getAll(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +157,7 @@ func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	timeRange, err := NewTimeRange(r.FormValue("start"), r.FormValue("end"))
+	timeRange, err := NewTimeRange(r.FormValue("start-hour"), r.FormValue("end-hour"))
 	if err != nil {
 		abort(w, err, http.StatusBadRequest)
 		return
@@ -177,14 +166,19 @@ func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
 	// Get the data points from the database
 	data, err := s.store.GetDataPoints(
 		timeRange,
-		chi.URLParam(r, "type"),
+		chi.URLParam(r, "counter"),
 		channelID)
 
 	if err != nil {
 		abort(w, err, http.StatusInternalServerError)
 		return
 	}
-	toJSON(w, data)
+
+	toJSON(w, ItemResponse{
+		StartHour: timeRange.StartDate(),
+		EndHour:   timeRange.EndDate(),
+		Items:     data,
+	})
 }
 
 func (s *Server) getSum(w http.ResponseWriter, r *http.Request) {
@@ -194,7 +188,7 @@ func (s *Server) getSum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	timeRange, err := NewTimeRange(r.FormValue("start"), r.FormValue("end"))
+	timeRange, err := NewTimeRange(r.FormValue("start-hour"), r.FormValue("end-hour"))
 	if err != nil {
 		abort(w, err, http.StatusBadRequest)
 		return
@@ -203,16 +197,20 @@ func (s *Server) getSum(w http.ResponseWriter, r *http.Request) {
 	// aggregate the data points by user
 	data, err := s.store.SumByUser(
 		timeRange,
-		chi.URLParam(r, "type"),
+		chi.URLParam(r, "counter"),
 		channelID)
 	if err != nil {
 		abort(w, err, http.StatusInternalServerError)
 		return
 	}
-	toJSON(w, data)
+	toJSON(w, ItemResponse{
+		StartHour: timeRange.StartDate(),
+		EndHour:   timeRange.EndDate(),
+		Items:     data,
+	})
 }
 
-// Convert channel names to channel id and place the result in the request context
+// Middleware to convert channel name to channel id and place the result in the request context
 func (s *Server) channelToID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := chi.URLParam(r, "channel")

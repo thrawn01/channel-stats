@@ -18,9 +18,10 @@ type Notifier interface {
 
 type MailgunNotification struct {
 	mg        mailgun.Mailgun
+	log       *logrus.Entry
 	recipient string
 	from      string
-	log       *logrus.Entry
+	disabled  bool
 }
 
 func NewNotifier() (Notifier, error) {
@@ -28,31 +29,41 @@ func NewNotifier() (Notifier, error) {
 	if err != nil {
 		return nil, err
 	}
+	l := log.WithField("prefix", "notifier")
 
 	// TODO: Remove once we fix this upstream
 	mg.SetAPIBase("https://api.mailgun.net/v3")
+	var disabled bool
 
 	recipient := os.Getenv("MG_RECIPIENT")
 	if recipient == "" {
-		return nil, errors.New("env variable 'MG_RECIPIENT' must be defined " +
-			"when using Mailgun notifications")
+		l.Info("env variable 'MG_RECIPIENT' and 'MG_FROM' must be defined " +
+			"to use Mailgun notifications, disabling notifications")
+		disabled = true
 	}
 
 	from := os.Getenv("MG_FROM")
-	if recipient == "" {
-		return nil, errors.New("env variable 'MG_FROM' must be defined " +
-			"when using Mailgun notifications")
+	if from == "" {
+		l.Info("env variable 'MG_RECIPIENT' and 'MG_FROM' must be defined " +
+			"to use Mailgun notifications, disabling notifications")
+		disabled = true
 	}
 
 	return &MailgunNotification{
-		log:       log.WithField("prefix", "notifier"),
 		recipient: recipient,
+		disabled:  disabled,
+		log:       l,
 		from:      from,
 		mg:        mg,
 	}, nil
 }
 
 func (s *MailgunNotification) Send(msg string) error {
+
+	if s.disabled {
+		return nil
+	}
+
 	message := s.mg.NewMessage(s.from, mgSubject, msg, s.recipient)
 	_, id, err := s.mg.Send(message)
 	if err != nil {

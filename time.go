@@ -55,6 +55,14 @@ func NewTimeRange(start, end string) (*TimeRange, error) {
 	}, nil
 }
 
+func (s *TimeRange) StartDate() string {
+	return s.Start.Format(RFC3339Short)
+}
+
+func (s *TimeRange) EndDate() string {
+	return s.End.Format(RFC3339Short)
+}
+
 func (s *TimeRange) ByHour() []string {
 	var result []string
 	result = append(result, s.Start.Format(RFC3339Short))
