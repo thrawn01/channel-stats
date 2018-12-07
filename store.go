@@ -11,6 +11,7 @@ import (
 
 	hc "cirello.io/HumorChecker"
 	"github.com/dgraph-io/badger"
+	"github.com/mailgun/holster"
 	"github.com/nlopes/slack"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -82,7 +83,7 @@ func (s *DataPoint) Key() []byte {
 	return []byte(fmt.Sprintf("%s/%s/%s/%s", s.Hour, s.DataType, s.ChannelID, s.UserID))
 }
 
-func (s *DataPoint) PrefixKey() []byte {
+func (s DataPoint) PrefixKey() []byte {
 	return []byte(fmt.Sprintf("%s/%s/%s", s.Hour, s.DataType, s.ChannelID))
 }
 
@@ -101,18 +102,34 @@ func (s *DataPoint) EncodeValue() []byte {
 
 func (s *Store) GetDataPoints(timeRange *TimeRange, dataType, channelID string) ([]DataPoint, error) {
 	s.log.Debugf("GetDataPoints(%+v, %s, %s)", *timeRange, dataType, channelID)
+	resultChan := make(chan DataPoint, 500000)
+
+	go func() {
+		fan := holster.NewFanOut(20)
+		for _, hour := range timeRange.ByHour() {
+			fan.Run(func(data interface{}) error {
+				hour := data.(string)
+				key := DataPoint{Hour: hour, DataType: dataType, ChannelID: channelID}.PrefixKey()
+				dps, err := s.GetByPrefix(key)
+				if err != nil {
+					return errors.Wrapf(err, "during while getting data points for prefix '%s'", key)
+				}
+
+				if len(dps) != 0 {
+					for _, dp := range dps {
+						resultChan <- dp
+					}
+				}
+				return nil
+			}, hour)
+		}
+		fan.Wait()
+		close(resultChan)
+	}()
+
 	var results []DataPoint
-
-	for _, hour := range timeRange.ByHour() {
-		dp := DataPoint{Hour: hour, DataType: dataType, ChannelID: channelID}
-		data, err := s.GetByPrefix(dp.PrefixKey())
-		if err != nil {
-			return nil, errors.Wrapf(err, "during while getting data points for prefix '%s'", dp.PrefixKey())
-		}
-
-		if len(data) != 0 {
-			results = append(results, data...)
-		}
+	for dp := range resultChan {
+		results = append(results, dp)
 	}
 	return results, nil
 }
