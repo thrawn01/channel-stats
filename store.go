@@ -102,10 +102,10 @@ func (s *DataPoint) EncodeValue() []byte {
 
 func (s *Store) GetDataPoints(timeRange *TimeRange, dataType, channelID string) ([]DataPoint, error) {
 	s.log.Debugf("GetDataPoints(%+v, %s, %s)", *timeRange, dataType, channelID)
-	resultChan := make(chan DataPoint, 500000)
+	resultChan := make(chan DataPoint, 5)
 
 	go func() {
-		fan := holster.NewFanOut(20)
+		fan := holster.NewFanOut(5)
 		for _, hour := range timeRange.ByHour() {
 			fan.Run(func(data interface{}) error {
 				hour := data.(string)
