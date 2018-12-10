@@ -57,7 +57,7 @@ type Server struct {
 
 func NewServer(store *Store, idMgr *IDManager) *Server {
 	s := &Server{
-		log:   log.WithField("prefix", "http"),
+		log:   GetLogger().WithField("prefix", "http"),
 		idMgr: idMgr,
 		store: store,
 	}
@@ -95,7 +95,7 @@ func NewServer(store *Store, idMgr *IDManager) *Server {
 		s.log.Infof("Listening on %s", listenAddr)
 		if err := s.server.ListenAndServe(); err != nil {
 			if err != http.ErrServerClosed {
-				log.Errorf("failed to bind to interface '%s': %s", listenAddr, err)
+				s.log.Errorf("failed to bind to interface '%s': %s", listenAddr, err)
 			}
 		}
 		s.wg.Done()
@@ -229,7 +229,7 @@ func (s *Server) channelToID(next http.Handler) http.Handler {
 }
 
 func abort(w http.ResponseWriter, err error, code int) {
-	log.WithField("prefix", "http").Errorf("HTTP: %s\n", err)
+	GetLogger().WithField("prefix", "http").Errorf("HTTP: %s\n", err)
 	http.Error(w, http.StatusText(code), code)
 }
 

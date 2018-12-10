@@ -5,14 +5,18 @@ import (
 	"github.com/x-cray/logrus-prefixed-formatter"
 )
 
-var log *logrus.Logger
+var logger *logrus.Logger
 
-func InitLogging(debug bool) {
-	log = logrus.New()
+func GetLogger() *logrus.Logger {
+	return logger
+}
+
+func InitLogging(conf Config) {
+	logger = logrus.New()
 	formatter := new(prefixed.TextFormatter)
 	formatter.FullTimestamp = true
-	log.Formatter = formatter
-	if debug {
-		log.SetLevel(logrus.DebugLevel)
+	logger.Formatter = formatter
+	if conf.Debug {
+		logger.SetLevel(logrus.DebugLevel)
 	}
 }

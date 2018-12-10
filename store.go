@@ -2,6 +2,7 @@ package channelstats
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"runtime/debug"
 	"sort"
@@ -31,18 +32,22 @@ type Store struct {
 	db    *badger.DB
 }
 
-func NewStore(idMgr *IDManager) (*Store, error) {
+func NewStore(conf Config, idMgr *IDManager) (*Store, error) {
 	opts := badger.DefaultOptions
-	opts.Dir = "./badger-db"
-	opts.ValueDir = "./badger-db"
+	opts.Dir = conf.Store.DataDir
+	opts.ValueDir = conf.Store.DataDir
 	opts.SyncWrites = true
+
+	// Badger logs to std logging, send logs to logrus instead
+	logger := GetLogger().WithField("prefix", "store")
+	log.SetOutput(logger.Writer())
 
 	db, err := badger.Open(opts)
 	if err != nil {
 		return nil, errors.Wrap(err, "while opening badger database")
 	}
 	return &Store{
-		log:   log.WithField("prefix", "store"),
+		log:   logger,
 		idMgr: idMgr,
 		db:    db,
 	}, nil

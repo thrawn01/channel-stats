@@ -3,34 +3,33 @@ package channelstats
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"runtime/debug"
 	"sync"
-
 	"sync/atomic"
 	"time"
 
 	"github.com/nlopes/slack"
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 type SlackBot struct {
-	log      *logrus.Entry
-	done     chan struct{}
-	server   *http.Server
-	rtm      *slack.RTM
-	idMgr    *IDManager
-	notifier Notifier
-	store    *Store
+	log    *logrus.Entry
+	done   chan struct{}
+	server *http.Server
+	rtm    *slack.RTM
+	idMgr  *IDManager
+	notify Notifier
+	store  *Store
+	conf   Config
 }
 
-func NewSlackBot(store *Store, idMgr *IDManager, notifier Notifier) *SlackBot {
+func NewSlackBot(conf Config, store *Store, idMgr *IDManager, notify Notifier) *SlackBot {
 	return &SlackBot{
-		log:      log.WithField("prefix", "bot"),
-		notifier: notifier,
-		idMgr:    idMgr,
-		store:    store,
+		log:    GetLogger().WithField("prefix", "slack"),
+		notify: notify,
+		idMgr:  idMgr,
+		store:  store,
+		conf:   conf,
 	}
 }
 
@@ -44,7 +43,6 @@ func (s *SlackBot) Start() error {
 		var disconnected bool
 		var notified bool
 
-		// TODO: Shut this down gracefully
 		for {
 			select {
 			case <-ticker:
@@ -56,7 +54,7 @@ func (s *SlackBot) Start() error {
 							continue
 						}
 
-						err := s.notifier.Send("channel-stats has been disconnected from " +
+						err := s.notify.Operator("channel-stats has been disconnected from " +
 							"slack for more than 30 seconds")
 						if err != nil {
 							s.log.Errorf("while sending notification - %s", err)
@@ -79,34 +77,29 @@ func (s *SlackBot) Start() error {
 
 	// In a for loop because poorly written gorilla garbage panics occasionally
 	for {
-		token := os.Getenv("SLACK_TOKEN")
-		if token == "" {
-			return errors.New("environment variable 'SLACK_TOKEN' empty or missing")
-		}
-
 		s.log.Info("Opening RTM WebSocket...")
 		atomic.StoreInt32(&connected, 1)
 
-		api := slack.New(token)
+		api := slack.New(s.conf.Slack.Token)
 		s.rtm = api.NewRTM()
 
 		wg.Add(1)
 		go func() {
 			s.rtm.ManageConnection()
 			wg.Done()
-			log.Debug("ManageConnection() done")
+			s.log.Debug("ManageConnection() done")
 		}()
 
 		// Return true if we wish to reconnect
 		if s.handleEvents() {
 			atomic.StoreInt32(&connected, 0)
-			log.Debug("Reconnecting...")
+			s.log.Debug("Reconnecting...")
 			s.rtm.Disconnect()
 			wg.Wait()
 			continue
 		}
 		atomic.StoreInt32(&connected, 0)
-		log.Debug("Disconnecting...")
+		s.log.Debug("Disconnecting...")
 		wg.Wait()
 		return nil
 	}
@@ -152,7 +145,7 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 					s.log.Errorf("%s", err)
 				}
 			case *slack.ReactionAddedEvent:
-				log.Debugf("Reaction Added By: %s", ev.ItemUser)
+				s.log.Debugf("Reaction Added By: %s", ev.ItemUser)
 				err := s.store.HandleReactionAdded(ev)
 				if err != nil {
 					s.log.Errorf("%s", err)
@@ -176,13 +169,9 @@ func (s *SlackBot) handleEvents() (shouldReconnect bool) {
 				s.log.Error("RTM reports invalid credentials; disconnecting...")
 				return
 			case *slack.IncomingEventError:
-				log.Errorf("Incoming Error '%+v'", msg)
-				//shouldReconnect = true
-				//return true
+				s.log.Errorf("Incoming Error '%+v'", msg)
 			case *slack.DisconnectedEvent:
-				log.Errorf("Disconnected...", msg)
-				//shouldReconnect = true
-				//return true
+				s.log.Errorf("Disconnected...", msg)
 			default:
 				s.log.Debugf("Event Received: %+v", msg)
 			}

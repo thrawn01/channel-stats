@@ -1,8 +1,6 @@
 package channelstats
 
 import (
-	"os"
-
 	"github.com/mailgun/mailgun-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -13,62 +11,44 @@ const (
 )
 
 type Notifier interface {
-	Send(string) error
+	Operator(string) error
 }
 
 type MailgunNotification struct {
-	mg        mailgun.Mailgun
-	log       *logrus.Entry
-	recipient string
-	from      string
-	disabled  bool
+	mg   mailgun.Mailgun
+	log  *logrus.Entry
+	conf Config
 }
 
-func NewNotifier() (Notifier, error) {
-	mg, err := mailgun.NewMailgunFromEnv()
-	if err != nil {
-		return nil, err
+func NewNotifier(conf Config) (Notifier, error) {
+	if !conf.Mailgun.Enabled {
+		return &NullNotifier{}, nil
 	}
-	l := log.WithField("prefix", "notifier")
+	return NewMailgunNotifier(conf)
+}
 
-	// TODO: Remove once we fix this upstream
-	mg.SetAPIBase("https://api.mailgun.net/v3")
-	var disabled bool
+func NewMailgunNotifier(conf Config) (Notifier, error) {
 
-	recipient := os.Getenv("MG_RECIPIENT")
-	if recipient == "" {
-		l.Info("env variable 'MG_RECIPIENT' and 'MG_FROM' must be defined " +
-			"to use Mailgun notifications, disabling notifications")
-		disabled = true
-	}
-
-	from := os.Getenv("MG_FROM")
-	if from == "" {
-		l.Info("env variable 'MG_RECIPIENT' and 'MG_FROM' must be defined " +
-			"to use Mailgun notifications, disabling notifications")
-		disabled = true
-	}
+	mg := mailgun.NewMailgun(conf.Mailgun.Domain, conf.Mailgun.APIKey)
 
 	return &MailgunNotification{
-		recipient: recipient,
-		disabled:  disabled,
-		log:       l,
-		from:      from,
-		mg:        mg,
+		log: GetLogger().WithField("prefix", "notifier"),
+		mg:  mg,
 	}, nil
 }
 
-func (s *MailgunNotification) Send(msg string) error {
-
-	if s.disabled {
-		return nil
-	}
-
-	message := s.mg.NewMessage(s.from, mgSubject, msg, s.recipient)
+func (s *MailgunNotification) Operator(msg string) error {
+	message := s.mg.NewMessage(s.conf.Mailgun.From, mgSubject, msg, s.conf.Mailgun.Recipient)
 	_, id, err := s.mg.Send(message)
 	if err != nil {
 		return errors.Wrap(err, "while sending email notification via Mailgun")
 	}
 	s.log.Infof("Sent notification via mailgun (%s)", id)
+	return nil
+}
+
+type NullNotifier struct{}
+
+func (n *NullNotifier) Operator(msg string) error {
 	return nil
 }

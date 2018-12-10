@@ -4,43 +4,44 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-
 	"time"
 
 	"github.com/thrawn01/channel-stats"
 )
 
+func checkErr(err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "-- %s\n", err)
+		os.Exit(1)
+	}
+}
+
 func main() {
-	channelstats.InitLogging(true)
 
-	notifier, err := channelstats.NewNotifier()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "-- %s\n", err)
-		os.Exit(1)
-	}
+	// Load config
+	conf, err := channelstats.LoadConfig()
+	checkErr(err)
 
-	err = notifier.Send(fmt.Sprintf("[channel-stats] Started @ %s", time.Now()))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "-- %s\n", err)
-		os.Exit(1)
-	}
+	// Initialize our logging config
+	channelstats.InitLogging(conf)
 
-	idMgr, err := channelstats.NewIdManager()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "-- %s\n", err)
-		os.Exit(1)
-	}
+	// Can notify an operator of events
+	notify, err := channelstats.NewNotifier(conf)
+	checkErr(err)
 
-	store, err := channelstats.NewStore(idMgr)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "-- %s\n", err)
-		os.Exit(1)
-	}
-	// Close badger so we don't have LOCK errors
+	checkErr(notify.Operator(fmt.Sprintf("[channel-stats] Started @ %s", time.Now())))
+
+	// The ID manager keeps track of channel and user ids
+	idMgr, err := channelstats.NewIdManager(conf)
+	checkErr(err)
+
+	// Initialize the badger data store
+	store, err := channelstats.NewStore(conf, idMgr)
+	checkErr(err)
 	defer store.Close()
 
-	// Start the slackbot
-	bot := channelstats.NewSlackBot(store, idMgr, notifier)
+	// Start the slack bot
+	bot := channelstats.NewSlackBot(conf, store, idMgr, notify)
 
 	// Start the http server
 	server := channelstats.NewServer(store, idMgr)

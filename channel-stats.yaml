@@ -1,0 +1,21 @@
+# Slack config
+slack:
+  # Both the token and legacy token are required
+  token: xoxo-12345125123457128357129-fake
+  legacy_token: xoxo-12342134012304812-1209481320912-1234213412-fake
+
+# Enable debug logging
+debug: false
+
+# mailgun Notification config
+#mailgun:
+#  enabled: true
+#  api_key: api-242109123109
+#  domain: your-domain.com
+#  recipient: operator@your-domain.com
+#  from: channel-stats@your-domain.com
+
+# badger data config
+#store:
+#  data-dir: ./badger-db
+

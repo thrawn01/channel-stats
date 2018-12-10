@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -42,14 +41,10 @@ type IDManager struct {
 	token         string
 }
 
-func NewIdManager() (*IDManager, error) {
-	token := os.Getenv("SLACK_LEGACY_TOKEN")
-	if token == "" {
-		return nil, errors.New("environment variable 'SLACK_LEGACY_TOKEN' empty or missing")
-	}
+func NewIdManager(conf Config) (*IDManager, error) {
 	s := IDManager{
-		log:   log.WithField("prefix", "id-manager"),
-		token: token,
+		log:   GetLogger().WithField("prefix", "id-manager"),
+		token: conf.Slack.LegacyToken,
 	}
 	// Populate our channel listing
 	if err := s.UpdateChannels(); err != nil {
