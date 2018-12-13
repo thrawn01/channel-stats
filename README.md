@@ -114,7 +114,7 @@ container using the pre-built image.
 
 ```bash
 # Download the docker-compose file
-$ curl --FIXME
+$ curl -O https://raw.githubusercontent.com/thrawn01/channel-stats/master/docker-compose.yaml
 
 # Edit the compose file to provide your slack bot token
 # environment variables
