@@ -108,6 +108,8 @@ $ curl http://localhost:2020/api/channels/general/data/messages | jq
 This project doesnt have a UI yet... but if anyone is interested in making a cool looking interface the
 place holder for a UI is available via http://localhost:2020/ui/index.html
 
+![Screenshot Here](https://raw.githubusercontent.com/thrawn01/channel-stats/master/ui-screenshot.png)
+
 ## Run via docker
 Easiest way to get started is by running `channel-stats` in a docker
 container using the pre-built image.
