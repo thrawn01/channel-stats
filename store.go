@@ -26,13 +26,22 @@ const (
 var linkRegex = regexp.MustCompile(`(http://|https://)`)
 var emojiRegex = regexp.MustCompile(`:([a-z0-9_\+\-]+):`)
 
+type Storer interface {
+	GetDataPoints(*TimeRange, string, string) ([]DataPoint, error)
+	SumByUser(*TimeRange, string, string) ([]UserSum, error)
+	HandleReactionAdded(*slack.ReactionAddedEvent) error
+	HandleMessage(*slack.MessageEvent) error
+	GetAll() ([]DataPoint, error)
+	Close() error
+}
+
 type Store struct {
-	idMgr *IDManager
+	idMgr IDManager
 	log   *logrus.Entry
 	db    *badger.DB
 }
 
-func NewStore(conf Config, idMgr *IDManager) (*Store, error) {
+func NewStore(conf Config, idMgr IDManager) (Storer, error) {
 	opts := badger.DefaultOptions
 	opts.Dir = conf.Store.DataDir
 	opts.ValueDir = conf.Store.DataDir
@@ -92,7 +101,7 @@ func (s DataPoint) PrefixKey() []byte {
 	return []byte(fmt.Sprintf("%s/%s/%s", s.Hour, s.DataType, s.ChannelID))
 }
 
-func (s *DataPoint) ResolveID(idMgr *IDManager) (err error) {
+func (s *DataPoint) ResolveID(idMgr IDManager) (err error) {
 	s.ChannelName, err = idMgr.GetChannelName(s.ChannelID)
 	s.UserName, err = idMgr.GetUserName(s.UserID)
 	return err
@@ -113,13 +122,11 @@ func (s *Store) GetDataPoints(timeRange *TimeRange, dataType, channelID string) 
 		fan := holster.NewFanOut(5)
 		for _, hour := range timeRange.ByHour() {
 			fan.Run(func(data interface{}) error {
-				hour := data.(string)
-				key := DataPoint{Hour: hour, DataType: dataType, ChannelID: channelID}.PrefixKey()
+				key := DataPoint{Hour: data.(string), DataType: dataType, ChannelID: channelID}.PrefixKey()
 				dps, err := s.GetByPrefix(key)
 				if err != nil {
 					return errors.Wrapf(err, "during while getting data points for prefix '%s'", key)
 				}
-
 				if len(dps) != 0 {
 					for _, dp := range dps {
 						resultChan <- dp
@@ -216,11 +223,11 @@ func (s *Store) GetAll() ([]DataPoint, error) {
 	return results, err
 }
 
-func (s *Store) Close() {
-	s.db.Close()
+func (s *Store) Close() error {
+	return s.db.Close()
 }
 
-func (s *Store) HourFromTimeStamp(text string) (string, error) {
+func (s *Store) hourFromTimeStamp(text string) (string, error) {
 	float, err := strconv.ParseFloat(text, 64)
 	if err != nil {
 		return "", errors.Wrapf(err, "timestamp conversion for '%s'", text)
@@ -230,7 +237,7 @@ func (s *Store) HourFromTimeStamp(text string) (string, error) {
 }
 
 func (s *Store) HandleReactionAdded(ev *slack.ReactionAddedEvent) error {
-	hour, err := s.HourFromTimeStamp(ev.EventTimestamp)
+	hour, err := s.hourFromTimeStamp(ev.EventTimestamp)
 	if err != nil {
 		return errors.Wrap(err, "while handling reaction added")
 	}
@@ -245,14 +252,14 @@ func (s *Store) HandleReactionAdded(ev *slack.ReactionAddedEvent) error {
 		dp.DataType = "emoji"
 		err := saveDataPoint(txn, dp)
 		if err != nil {
-			errors.Wrapf(err, "while storing 'messages' data point")
+			return errors.Wrapf(err, "while storing 'messages' data point")
 		}
 		return nil
 	})
 }
 
 func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
-	hour, err := s.HourFromTimeStamp(ev.Timestamp)
+	hour, err := s.hourFromTimeStamp(ev.Timestamp)
 	if err != nil {
 		return errors.Wrap(err, "while handling message")
 	}
@@ -275,7 +282,7 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 		dp.DataType = "messages"
 		err := saveDataPoint(txn, dp)
 		if err != nil {
-			errors.Wrapf(err, "while storing 'messages' data point")
+			return errors.Wrapf(err, "while storing 'messages' data point")
 		}
 
 		result := SentimentAnalysis(ev.Text)
@@ -283,32 +290,29 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 			dp.DataType = "positive"
 			err = saveDataPoint(txn, dp)
 			if err != nil {
-				errors.Wrapf(err, "while storing 'positive' data point")
+				return errors.Wrapf(err, "while storing 'positive' data point")
 			}
 		}
 		if result.Score < 0 {
 			dp.DataType = "negative"
-			saveDataPoint(txn, dp)
-			if err != nil {
-				errors.Wrapf(err, "while storing 'negative' data point")
+			if err = saveDataPoint(txn, dp); err != nil {
+				return errors.Wrapf(err, "while storing 'negative' data point")
 			}
 		}
 
 		// Link counter
 		if HasLink(ev.Text) {
 			dp.DataType = "link"
-			saveDataPoint(txn, dp)
-			if err != nil {
-				errors.Wrapf(err, "while storing 'link' data point")
+			if err = saveDataPoint(txn, dp); err != nil {
+				return errors.Wrapf(err, "while storing 'link' data point")
 			}
 		}
 
 		// Emoji counter
 		if HasEmoji(ev.Text) {
 			dp.DataType = "emoji"
-			saveDataPoint(txn, dp)
-			if err != nil {
-				errors.Wrapf(err, "while storing 'emoji' data point")
+			if err = saveDataPoint(txn, dp); err != nil {
+				return errors.Wrapf(err, "while storing 'emoji' data point")
 			}
 		}
 
@@ -316,11 +320,9 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 		count := CountWords(ev.Text)
 		dp.DataType = "word-count"
 		dp.Value = count
-		saveDataPoint(txn, dp)
-		if err != nil {
-			errors.Wrapf(err, "while storing 'word-count' data point")
+		if err = saveDataPoint(txn, dp); err != nil {
+			return errors.Wrapf(err, "while storing 'word-count' data point")
 		}
-
 		return nil
 	})
 }
@@ -392,3 +394,13 @@ func saveDataPoint(txn *badger.Txn, dp DataPoint) error {
 	}
 	return err
 }
+
+// Suitable for testing
+type NullStore struct{}
+
+func (n *NullStore) GetDataPoints(*TimeRange, string, string) ([]DataPoint, error) {
+	return []DataPoint{}, nil
+}
+func (n *NullStore) SumByUser(*TimeRange, string, string) ([]UserSum, error) { return []UserSum{}, nil }
+func (n *NullStore) GetAll() ([]DataPoint, error)                            { return []DataPoint{}, nil }
+func (n *NullStore) Close() error                                            { return nil }

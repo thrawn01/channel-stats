@@ -17,13 +17,13 @@ type SlackBot struct {
 	done   chan struct{}
 	server *http.Server
 	rtm    *slack.RTM
-	idMgr  *IDManager
+	idMgr  IDManager
 	notify Notifier
-	store  *Store
+	store  Storer
 	conf   Config
 }
 
-func NewSlackBot(conf Config, store *Store, idMgr *IDManager, notify Notifier) *SlackBot {
+func NewSlackBot(conf Config, store Storer, idMgr IDManager, notify Notifier) *SlackBot {
 	return &SlackBot{
 		log:    GetLogger().WithField("prefix", "slack"),
 		notify: notify,

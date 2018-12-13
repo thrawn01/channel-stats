@@ -32,7 +32,16 @@ type SlackUserList struct {
 	Members []SlackUserInfo
 }
 
-type IDManager struct {
+type IDManager interface {
+	UpdateUsers() error
+	UpdateChannels() error
+	GetChannelID(name string) (string, error)
+	GetChannelName(id string) (string, error)
+	GetUserID(name string) (string, error)
+	GetUserName(id string) (string, error)
+}
+
+type IDManage struct {
 	channelByName map[string]string
 	channelByID   map[string]string
 	userByName    map[string]string
@@ -41,8 +50,8 @@ type IDManager struct {
 	token         string
 }
 
-func NewIdManager(conf Config) (*IDManager, error) {
-	s := IDManager{
+func NewIdManager(conf Config) (IDManager, error) {
+	s := IDManage{
 		log:   GetLogger().WithField("prefix", "id-manager"),
 		token: conf.Slack.LegacyToken,
 	}
@@ -56,7 +65,7 @@ func NewIdManager(conf Config) (*IDManager, error) {
 	return &s, nil
 }
 
-func (s *IDManager) UpdateUsers() error {
+func (s *IDManage) UpdateUsers() error {
 	params := url.Values{}
 	params.Add("token", s.token)
 
@@ -92,7 +101,7 @@ func (s *IDManager) UpdateUsers() error {
 	return nil
 }
 
-func (s *IDManager) UpdateChannels() error {
+func (s *IDManage) UpdateChannels() error {
 	params := url.Values{}
 	params.Add("token", s.token)
 
@@ -128,30 +137,46 @@ func (s *IDManager) UpdateChannels() error {
 	return nil
 }
 
-func (s *IDManager) GetChannelID(name string) (string, error) {
+func (s *IDManage) GetChannelID(name string) (string, error) {
 	if id, exists := s.channelByName[name]; exists {
 		return id, nil
 	}
 	return "(unknown)", errors.Errorf("channel '%s' not found", name)
 }
 
-func (s *IDManager) GetChannelName(id string) (string, error) {
+func (s *IDManage) GetChannelName(id string) (string, error) {
 	if id, exists := s.channelByID[id]; exists {
 		return id, nil
 	}
 	return "(unknown)", errors.Errorf("channel id '%s' not found", id)
 }
 
-func (s *IDManager) GetUserID(name string) (string, error) {
+func (s *IDManage) GetUserID(name string) (string, error) {
 	if id, exists := s.userByName[name]; exists {
 		return id, nil
 	}
 	return "(unknown)", errors.Errorf("user '%s' not found", name)
 }
 
-func (s *IDManager) GetUserName(id string) (string, error) {
+func (s *IDManage) GetUserName(id string) (string, error) {
 	if id, exists := s.userByID[id]; exists {
 		return id, nil
 	}
 	return "(unknown)", errors.Errorf("user id '%s' not found", id)
 }
+
+// Suitable for testing
+type NullManage struct {
+}
+
+func (n *NullManage) UpdateUsers() error { return nil }
+
+func (n *NullManage) UpdateChannels() error { return nil }
+
+func (n *NullManage) GetChannelID(name string) (string, error) { return "C02C073ND", nil }
+
+func (n *NullManage) GetChannelName(id string) (string, error) { return "general", nil }
+
+func (n *NullManage) GetUserID(name string) (string, error) { return "", nil }
+
+func (n *NullManage) GetUserName(id string) (string, error) { return "", nil }

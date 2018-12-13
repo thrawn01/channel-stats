@@ -3,7 +3,10 @@ package channelstats
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/mailgun/holster/slice"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,10 +16,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var validGetParams = []string{"start-hour", "end-hour"}
+
 const (
 	listenAddr          = "0.0.0.0:2020"
 	missingChannelIDErr = "missing 'channel-id' from request context"
-	missingFileID       = "missing 'channel-id' from request context"
 	staticPath          = "html/"
 )
 
@@ -48,14 +52,14 @@ type ItemResponse struct {
 }
 
 type Server struct {
-	idMgr  *IDManager
+	idMgr  IDManager
 	wg     sync.WaitGroup
 	server *http.Server
-	store  *Store
+	store  Storer
 	log    *logrus.Entry
 }
 
-func NewServer(store *Store, idMgr *IDManager) *Server {
+func NewServer(store Storer, idMgr IDManager) *Server {
 	s := &Server{
 		log:   GetLogger().WithField("prefix", "http"),
 		idMgr: idMgr,
@@ -70,6 +74,7 @@ func NewServer(store *Store, idMgr *IDManager) *Server {
 	r.Use(middleware.Timeout(5 * time.Second))
 
 	// UI Routes
+	r.Get("/chart", s.chart)
 	r.Get("/", s.redirectUI)
 	r.Get("/index.html", s.redirectUI)
 	r.Route("/ui", func(r chi.Router) {
@@ -103,9 +108,10 @@ func NewServer(store *Store, idMgr *IDManager) *Server {
 	return s
 }
 
-func (s *Server) Stop() {
-	s.server.Shutdown(context.Background())
+func (s *Server) Stop() error {
+	err := s.server.Shutdown(context.Background())
 	s.wg.Wait()
+	return err
 }
 
 func (s *Server) doc(w http.ResponseWriter, r *http.Request) {
@@ -151,6 +157,11 @@ func (s *Server) getAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
+	if err := isValidParams(r, validGetParams); err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
 	channelID, ok := r.Context().Value("channel-id").(string)
 	if !ok {
 		abort(w, errors.New(missingChannelIDErr), http.StatusBadRequest)
@@ -182,6 +193,11 @@ func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getSum(w http.ResponseWriter, r *http.Request) {
+	if err := isValidParams(r, validGetParams); err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
 	channelID, ok := r.Context().Value("channel-id").(string)
 	if !ok {
 		abort(w, errors.New(missingChannelIDErr), http.StatusBadRequest)
@@ -241,4 +257,18 @@ func toJSON(w http.ResponseWriter, obj interface{}) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(resp)
+}
+
+func isValidParams(r *http.Request, validParams []string) error {
+	if r.Form == nil {
+		r.ParseMultipartForm(32 << 20)
+	}
+
+	for key := range r.Form {
+		fmt.Printf("Form: %s\n", key)
+		if !slice.ContainsString(key, validParams, strings.ToLower) {
+			return fmt.Errorf("invalid parameter '%s'", key)
+		}
+	}
+	return nil
 }
