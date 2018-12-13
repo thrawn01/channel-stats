@@ -118,7 +118,7 @@ container using the pre-built image.
 # Download the docker-compose file
 $ curl -O https://raw.githubusercontent.com/thrawn01/channel-stats/master/docker-compose.yaml
 
-# Edit the compose file to provide your slack bot token
+# Edit the compose file
 # environment variables
 $ vi docker-compose.yaml
 
@@ -130,9 +130,9 @@ $ curl http://localhost:2020/api | jq
 ```
 
 ## Run locally
-* Download the release binary from `FIXME`
-* Download the example yaml file
-* Edit the example file to provide your slack bot token
+* Download the release binary from [Releases Page](https://github.com/thrawn01/channel-stats/releases)
+* Download the [example yaml](https://raw.githubusercontent.com/thrawn01/channel-stats/master/channel-stats.yaml) 
+* Edit the example yaml
 * Run `./channel-stats --config /path/to/config.yaml`
 * Hit the api at localhost:2020 `curl http://localhost:2020/api | jq`
 
