@@ -1,0 +1,31 @@
+version: '3'
+services:
+  channel-stats:
+    image: thrawn01/channel-stats:latest
+    command: "/channel-stats"
+    environment:
+      # 'token' is a bot token from a slack app. Create a slack app here
+      # https://api.slack.com/apps then get the bot token from 'OAuth & Permissions'
+      - STATS_SLACK_TOKEN=xoxb-123421354-fake
+      # Currently we use the legacy API to retrieve channel and user names and ids
+      # Create a legacy token for your workspace here
+      # https://api.slack.com/custom-integrations/legacy-tokens
+      - STATS_SLACK_LEGACY_TOKEN=xoxp-123421412-fake
+      # Enable debug logging
+      - STATS_DEBUG=false
+      # Must be true for notification to work
+      - STATS_MG_ENABLED=false
+      # Use the Mailgun 'Private API key' found here
+      # https://app.mailgun.com/app/account/security under 'Security'
+      - STATS_MG_API_KEY=key-1q23412351235123512
+      # Name of verified domain you have registered with mailgun
+      - STATS_MG_DOMAIN=your.domain.com
+      # The email address of the operator of the bot
+      - STATS_MG_OPERATOR=admin@your.domain.com
+      # The from email address given when sending operator emails
+      - STATS_MG_FROM=channel-stats@your.odmain.com
+      # Location of the database on disk, should be changed if you
+      # wish to persist the data to a mounted directory
+      - STATS_STORE_DATA_DIR=/badger-db
+    ports:
+      - "2020:2020"

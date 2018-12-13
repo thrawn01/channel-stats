@@ -9,6 +9,8 @@ import (
 	"github.com/thrawn01/channel-stats"
 )
 
+var Version = "dev-build"
+
 func checkErr(err error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "-- %s\n", err)
@@ -24,6 +26,8 @@ func main() {
 
 	// Initialize our logging config
 	channelstats.InitLogging(conf)
+
+	channelstats.GetLogger().Infof("Starting Version: %s", Version)
 
 	// Can notify an operator of events
 	notify, err := channelstats.NewNotifier(conf)
@@ -60,8 +64,5 @@ func main() {
 		}
 	}()
 
-	if err := bot.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "-- %s\n", err)
-		os.Exit(1)
-	}
+	checkErr(bot.Start())
 }

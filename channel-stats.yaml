@@ -22,7 +22,7 @@ mailgun:
   # Env: STATS_MG_ENABLED
   enabled: false
 
-  # Use the Mailgun 'Private API key' found on the here
+  # Use the Mailgun 'Private API key' found here
   # https://app.mailgun.com/app/account/security under 'Security'
   # Env: STATS_MG_API_KEY
   api-key: api-242109123109
@@ -41,6 +41,8 @@ mailgun:
 
 # badger data config
 store:
+  # Location of the database on disk, should be changed if you
+  # wish to persist the data to a mounted directory
   # Env: STATS_STORE_DATA_DIR
   data-dir: ./badger-db
 
