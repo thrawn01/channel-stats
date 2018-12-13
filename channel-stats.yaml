@@ -1,21 +1,46 @@
 # Slack config
 slack:
-  # Both the token and legacy token are required
-  token: xoxo-12345125123457128357129-fake
-  legacy_token: xoxo-12342134012304812-1209481320912-1234213412-fake
+  # 'token' is a bot token from a slack app. Create a slack app here
+  # https://api.slack.com/apps then get the bot token from 'OAuth & Permissions'
+  # Env: STATS_SLACK_TOKEN
+  token: xoxb-12345125123457128357129-fake
+
+  # Currently we use the legacy API to retrieve channel and user names and ids
+  # Create a legacy token for your workspace here
+  # https://api.slack.com/custom-integrations/legacy-tokens
+  # Env: STATS_SLACK_LEGACY_TOKEN
+  legacy-token: xoxp-12342134012304812-1209481320912-1234213412-fake
 
 # Enable debug logging
+# Env: STATS_DEBUG
 debug: false
 
-# mailgun Notification config
-#mailgun:
-#  enabled: true
-#  api_key: api-242109123109
-#  domain: your-domain.com
-#  recipient: operator@your-domain.com
-#  from: channel-stats@your-domain.com
+# Mailgun Notification config
+mailgun:
+
+  # Must be true for notification to work
+  # Env: STATS_MG_ENABLED
+  enabled: false
+
+  # Use the Mailgun 'Private API key' found on the here
+  # https://app.mailgun.com/app/account/security under 'Security'
+  # Env: STATS_MG_API_KEY
+  api-key: api-242109123109
+
+  # Name of verified domain you have registered with mailgun
+  # Env: STATS_MG_DOMAIN
+  domain: your-domain.com
+
+  # The email address of the operator of the bot
+  # Env: STATS_MG_OPERATOR
+  operator: operator@your-domain.com
+
+  # The from email address given when sending operator emails
+  # Env: STATS_MG_FROM
+  from: channel-stats@your-domain.com
 
 # badger data config
-#store:
-#  data-dir: ./badger-db
+store:
+  # Env: STATS_STORE_DATA_DIR
+  data-dir: ./badger-db
 

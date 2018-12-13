@@ -24,6 +24,11 @@ func NewNotifier(conf Config) (Notifier, error) {
 	if !conf.Mailgun.Enabled {
 		return &NullNotifier{}, nil
 	}
+
+	if conf.Debug {
+		mailgun.Debug = true
+	}
+
 	return NewMailgunNotifier(conf)
 }
 
@@ -32,13 +37,14 @@ func NewMailgunNotifier(conf Config) (Notifier, error) {
 	mg := mailgun.NewMailgun(conf.Mailgun.Domain, conf.Mailgun.APIKey)
 
 	return &MailgunNotification{
-		log: GetLogger().WithField("prefix", "notifier"),
-		mg:  mg,
+		log:  GetLogger().WithField("prefix", "notifier"),
+		conf: conf,
+		mg:   mg,
 	}, nil
 }
 
 func (s *MailgunNotification) Operator(msg string) error {
-	message := s.mg.NewMessage(s.conf.Mailgun.From, mgSubject, msg, s.conf.Mailgun.Recipient)
+	message := s.mg.NewMessage(s.conf.Mailgun.From, mgSubject, msg, s.conf.Mailgun.Operator)
 	_, id, err := s.mg.Send(message)
 	if err != nil {
 		return errors.Wrap(err, "while sending email notification via Mailgun")

@@ -72,12 +72,12 @@ func (s *IDManager) UpdateUsers() error {
 	var userList SlackUserList
 	err = json.NewDecoder(resp.Body).Decode(&userList)
 	if err != nil {
-		return errors.Wrap(err, "GET '%s' failed during json decode")
+		return errors.Wrapf(err, "GET '%s' failed during json decode", url)
 	}
 
 	// Handle slack error
 	if !userList.Ok {
-		return errors.Errorf("GET '%s' failed with slack error '%s'", userList.Error)
+		return errors.Errorf("GET '%s' failed with slack error '%s'", url, userList.Error)
 	}
 
 	// Extract user name and id's
@@ -108,12 +108,12 @@ func (s *IDManager) UpdateChannels() error {
 	var channelList SlackChannelList
 	err = json.NewDecoder(resp.Body).Decode(&channelList)
 	if err != nil {
-		return errors.Wrap(err, "GET '%s' failed during json decode")
+		return errors.Wrapf(err, "GET '%s' failed during json decode", url)
 	}
 
 	// Handle slack error
 	if !channelList.Ok {
-		return errors.Errorf("GET '%s' failed with slack error '%s'", channelList.Error)
+		return errors.Errorf("GET '%s' failed with slack error '%s'", url, channelList.Error)
 	}
 
 	// Extract channel name and id's
