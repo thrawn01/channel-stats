@@ -166,17 +166,29 @@ func (s *IDManage) GetUserName(id string) (string, error) {
 }
 
 // Suitable for testing
-type NullManage struct {
+type MockIDManage struct {
+	UserByName map[string]string
+	UserByID   map[string]string
 }
 
-func (n *NullManage) UpdateUsers() error { return nil }
+func (n *MockIDManage) UpdateUsers() error { return nil }
 
-func (n *NullManage) UpdateChannels() error { return nil }
+func (n *MockIDManage) UpdateChannels() error { return nil }
 
-func (n *NullManage) GetChannelID(name string) (string, error) { return "C02C073ND", nil }
+func (n *MockIDManage) GetChannelID(name string) (string, error) { return "C02C073ND", nil }
 
-func (n *NullManage) GetChannelName(id string) (string, error) { return "general", nil }
+func (n *MockIDManage) GetChannelName(id string) (string, error) { return "general", nil }
 
-func (n *NullManage) GetUserID(name string) (string, error) { return "", nil }
+func (n *MockIDManage) GetUserID(name string) (string, error) {
+	if id, exists := n.UserByName[name]; exists {
+		return id, nil
+	}
+	return "(unknown)", errors.Errorf("user '%s' not found", name)
+}
 
-func (n *NullManage) GetUserName(id string) (string, error) { return "", nil }
+func (n *MockIDManage) GetUserName(id string) (string, error) {
+	if id, exists := n.UserByID[id]; exists {
+		return id, nil
+	}
+	return "(unknown)", errors.Errorf("user id '%s' not found", id)
+}

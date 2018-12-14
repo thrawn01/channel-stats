@@ -1,15 +1,47 @@
 package channelstats
 
 import (
-	"fmt"
+	"github.com/go-chi/chi"
+	"github.com/pkg/errors"
 	"github.com/wcharczuk/go-chart"
 	"net/http"
 )
 
 func (s *Server) chart(w http.ResponseWriter, r *http.Request) {
+	if err := isValidParams(r, validGetParams); err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	channelID, ok := r.Context().Value("channel-id").(string)
+	if !ok {
+		abort(w, errors.New(missingChannelIDErr), http.StatusBadRequest)
+		return
+	}
+
+	timeRange, err := NewTimeRange(r.FormValue("start-hour"), r.FormValue("end-hour"))
+	if err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	if err := s.renderBarChart(w, timeRange, chi.URLParam(r, "counter"), channelID); err != nil {
+		abort(w, err, http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) renderBarChart(w http.ResponseWriter, tr *TimeRange, cType, cID string) error {
+	data, err := s.store.SumByUser(tr, cType, cID)
+	if err != nil {
+		return err
+	}
+
+	var bars []chart.Value
+	for _, item := range data[len(data)-4:] {
+		bars = append(bars, chart.Value{Label: item.User, Value: float64(item.Sum)})
+	}
+
 	sbc := chart.BarChart{
-		//Title:      "Test Bar Chart",
-		//TitleStyle: chart.StyleShow(),
 		Background: chart.Style{
 			Show: true,
 			Padding: chart.Box{
@@ -24,40 +56,17 @@ func (s *Server) chart(w http.ResponseWriter, r *http.Request) {
 		BarWidth: 65,
 		XAxis: chart.Style{
 			Show:     true,
-			FontSize: 10,
+			FontSize: 13,
 		},
 		YAxis: chart.YAxis{
-			/*TickStyle: chart.Style{
-				Show:        true,
-				StrokeColor: chart.ColorBlack,
-				StrokeWidth: 10,
-			},
-			GridMajorStyle: chart.Style{
-				Show:        true,
-				StrokeColor: chart.ColorBlack,
-				StrokeWidth: 10,
-			},
-			GridMinorStyle: chart.Style{
-				Show:        true,
-				StrokeColor: chart.ColorBlack,
-				StrokeWidth: 10,
-			},*/
 			Style: chart.Style{
 				Show:     true,
-				FontSize: 10,
+				FontSize: 12,
 			},
 		},
-		Bars: []chart.Value{
-			{Value: 10, Label: "Blue Green"},
-			{Value: 100, Label: "Green"},
-			{Value: 200, Label: "Gray"},
-			{Value: 400, Label: "Orange"},
-		},
+		Bars: bars,
 	}
 
 	w.Header().Set("Content-Type", "image/png")
-	err := sbc.Render(chart.PNG, w)
-	if err != nil {
-		fmt.Printf("Error rendering chart: %v\n", err)
-	}
+	return sbc.Render(chart.PNG, w)
 }

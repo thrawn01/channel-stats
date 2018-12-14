@@ -74,7 +74,6 @@ func NewServer(store Storer, idMgr IDManager) *Server {
 	r.Use(middleware.Timeout(5 * time.Second))
 
 	// UI Routes
-	r.Get("/chart", s.chart)
 	r.Get("/", s.redirectUI)
 	r.Get("/index.html", s.redirectUI)
 	r.Route("/ui", func(r chi.Router) {
@@ -87,6 +86,7 @@ func NewServer(store Storer, idMgr IDManager) *Server {
 		r.Get("/", s.doc)
 		r.Route("/channels/{channel}", func(r chi.Router) {
 			r.Use(s.channelToID)
+			r.Get("/chart/{counter}", s.chart)
 			r.Get("/data/{counter}", s.getDataPoints)
 			r.Get("/sum/{counter}", s.getSum)
 		})
@@ -265,7 +265,6 @@ func isValidParams(r *http.Request, validParams []string) error {
 	}
 
 	for key := range r.Form {
-		fmt.Printf("Form: %s\n", key)
 		if !slice.ContainsString(key, validParams, strings.ToLower) {
 			return fmt.Errorf("invalid parameter '%s'", key)
 		}

@@ -39,6 +39,22 @@ func main() {
 	idMgr, err := channelstats.NewIdManager(conf)
 	checkErr(err)
 
+	/*idMgr := &channelstats.MockIDManage{
+		UserByID: map[string]string{
+			"U02C11FN4": "Joe",
+			"U02C6CMDP": "Scott",
+			"U02C7322G": "Thrawn",
+			"U02C73W94": "Admiral",
+			"U02CG0QLN": "Cat",
+			"U02DJSNKB": "Dog",
+			"U8A9VQ22W": "Kitty",
+			"U8MQTQUAX": "Person",
+			"U8M58VCSE": "Doug",
+			"U02C7788J": "Doug Jr",
+			"U02C073N7": "Me",
+		},
+	}*/
+
 	// Initialize the badger data store
 	store, err := channelstats.NewStore(conf, idMgr)
 	checkErr(err)
@@ -60,6 +76,7 @@ func main() {
 				server.Stop()
 				// Stop the bot
 				bot.Stop()
+				//os.Exit(1)
 			}
 		}
 	}()
