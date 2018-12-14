@@ -3,12 +3,12 @@ A slack bot to collect sentiment analysis and other statistics for a channel.
 
 ## API Documentation
 The bot stores event counts by hour such that when querying for results all
-calls must include a `start-hour` and an `end-hour`. If no **start** or
+calls can include a `start-hour` and an `end-hour`. If no **start** or
  **end** hour is provided then stats for the last 7 days is returned for
 the specified channel.
 
 The following is a list of available counter types for use with the
- `<type>` parameter.
+ `<counter>` parameter.
 
 Type       | Description
 -----------|------------
@@ -21,63 +21,106 @@ word-count | The number of words counted in the channel
 
 **NOTE: All date / hour formats follow RFC3339 short format `2018-12-06T01`**
 
-### Retrieve total counts for a stat over a span of hours
+### Retrieve Counter Totals
 Calls to `/sum` retrieve a summation of all counters for a specified duration
 
 ```
-GET /api/channels/<channel-name>/sum/<type>
+GET /api/sum
 ```
 
 Parameter   | Description
 ------------|------------
-start-hour  | The start hour
-end-hour    | Then end hour
+start-hour  | Retrieve counters starting at this hour
+end-hour    | Retrieve counters ending at this hour
+channel     | Channel to retrieve counters for
+counter     | Name of the counter (See 'Counters' for valid counter names)
 
 ##### Examples
 Get a count of messages for the last 7 days for channel 'general'
 ```bash
-$ curl http://localhost:2020/api/channels/general/sum/messages | jq
+$ curl 'http://localhost:2020/api/sum?channel=general&counter=messages' | jq
 {
     "start-hour": "2018-12-06T18",
     "end-hour": "2018-12-13T18",
     "items":[
         {
-            "User": "foo",
-            "Sum": 20
+            "user": "foo",
+            "sum": 20
         },
         {
-            "User": "bar",
-            "Sum": 2
+            "user": "bar",
+            "sum": 2
         }
     ]
 }
 ```
 Get a count of negative sentiment messages since midnight
 ```bash
-$ curl http://localhost:2020/api/channels/general/sum/negative?start-date=2018-12-13T00
+$ curl 'http://localhost:2020/api/sum?channel=general&counter=negative&start-date=2018-12-13T00'
 ```
 
 Get a count of messages with emoji's in the last 2 days
 ```bash
-$ curl http://localhost:2020/api/channels/general/sum/emoji?start-hour=2018-12-11T00&end-hour=2018-12-13T00
+$ curl 'http://localhost:2020/api/sum?channel=general&counter=emoji&start-hour=2018-12-11T00&end-hour=2018-12-13T00'
+```
+
+### Retrieve Counter Percentages
+Calls to `/percentage` retrieve a summation and percentage of total messages for a specified duration. This is useful 
+for figuring out what percentage of total messages have negative or positive sentiment.
+
+```
+GET /api/percentage
+```
+
+Parameter   | Description
+------------|------------
+start-hour  | Retrieve counters starting at this hour
+end-hour    | Retrieve counters ending at this hour
+channel     | Channel to retrieve counters for
+counter     | Name of the counter (See 'Counters' for valid counter names)
+
+##### Examples
+Get a percent of messages that have negative sentiment the last 7 days for channel 'general'
+```bash
+$ curl 'http://localhost:2020/api/percentage?channel=general&counter=negative' | jq
+{
+    "start-hour": "2018-12-06T18",
+    "end-hour": "2018-12-13T18",
+    "items":[
+        {
+            "user": "foo",
+            "total": 241,
+            "count": 53,
+            "percentage": 21
+        },
+        {
+            "user": "bar",
+            "total": 186,
+            "count": 30,
+            "percentage": 16
+        }
+    ]
+}
 ```
 
 ### Retrieve raw counter data
-You can get access to the raw counter data via the `/data` endpoint
+You can get access to the raw counter data via the `/datapoints` endpoint
 
 ```
-GET /api/channels/<channel-name>/data/<type>
+GET /api/datapoints
 ```
 
 Parameter   | Description
 ------------|------------
 start-hour  | The start hour
 end-hour    | Then end hour
+channel     | Channel to retrieve counters for
+counter     | Name of the counter (See 'Counters' for valid counter names)
 
 ##### Examples
 Get all the counters for the last 7 days for the `general` channel
 ```bash
-$ curl http://localhost:2020/api/channels/general/data/messages | jq
+$ curl 'http://localhost:2020/api/datapoints?channel=general&counter=messages' | jq
 {
     "start-hour": "2018-12-06T19",
     "end-hour": "2018-12-13T19",
@@ -105,8 +148,9 @@ $ curl http://localhost:2020/api/channels/general/data/messages | jq
 ```
 
 ## Web UI
-This project doesnt have a UI yet... but if anyone is interested in making a cool looking interface the
-place holder for a UI is available via http://localhost:2020/ui/index.html
+This project kinda has a UI ... but it's super limited. If anyone is interested in making a cool looking interface,
+ the place holder for a UI is available via http://localhost:2020/ui/index.html when run from the local go source via
+ `go run ./cmd/channel-stats/main.go`
 
 ![Screenshot Here](https://raw.githubusercontent.com/thrawn01/channel-stats/master/ui-screenshot.png)
 

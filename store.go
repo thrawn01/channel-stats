@@ -27,8 +27,9 @@ var linkRegex = regexp.MustCompile(`(http://|https://)`)
 var emojiRegex = regexp.MustCompile(`:([a-z0-9_\+\-]+):`)
 
 type Storer interface {
+	PercentageByUser(timeRange *TimeRange, dataType, channelID string) ([]PercentageResp, error)
 	GetDataPoints(*TimeRange, string, string) ([]DataPoint, error)
-	SumByUser(*TimeRange, string, string) ([]UserSum, error)
+	SumByUser(*TimeRange, string, string) ([]SumResp, error)
 	HandleReactionAdded(*slack.ReactionAddedEvent) error
 	HandleMessage(*slack.MessageEvent) error
 	GetAll() ([]DataPoint, error)
@@ -146,13 +147,13 @@ func (s *Store) GetDataPoints(timeRange *TimeRange, dataType, channelID string) 
 	return results, nil
 }
 
-type UserSum struct {
-	User string
-	Sum  int64
+type SumResp struct {
+	User string `json:"user"`
+	Sum  int64  `json:"sum"`
 }
 
-func (s *Store) SumByUser(timeRange *TimeRange, dataType, channelID string) ([]UserSum, error) {
-	var results []UserSum
+func (s *Store) SumByUser(timeRange *TimeRange, dataType, channelID string) ([]SumResp, error) {
+	var results []SumResp
 
 	dataPoints, err := s.GetDataPoints(timeRange, dataType, channelID)
 	if err != nil {
@@ -169,12 +170,63 @@ func (s *Store) SumByUser(timeRange *TimeRange, dataType, channelID string) ([]U
 	}
 
 	for key, value := range byUser {
-		results = append(results, UserSum{User: key, Sum: value})
+		results = append(results, SumResp{User: key, Sum: value})
 	}
 
 	// Sort the results
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Sum < results[j].Sum
+	})
+
+	return results, nil
+}
+
+type PercentageResp struct {
+	// Name of the user
+	User string `json:"user"`
+	// Total number of messages used in the percent calculation
+	Total int64 `json:"total"`
+	// Total number of the 'counter' used in the percent calculation
+	Count int64 `json:"count"`
+	// The calculated percentage
+	Percent int64 `json:"percentage"`
+}
+
+func (s *Store) PercentageByUser(timeRange *TimeRange, dataType, channelID string) ([]PercentageResp, error) {
+	// Get the total number of messages for the channel during this time
+	messages, err := s.SumByUser(timeRange, "messages", channelID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the data type counts during this time
+	counters, err := s.SumByUser(timeRange, dataType, channelID)
+	if err != nil {
+		return nil, err
+	}
+
+	counterMap := make(map[string]int64)
+	for _, counter := range counters {
+		counterMap[counter.User] = counter.Sum
+	}
+
+	var results []PercentageResp
+	for _, message := range messages {
+		count, ok := counterMap[message.User]
+		if ok {
+			results = append(results, PercentageResp{
+				User:    message.User,
+				Total:   message.Sum,
+				Count:   count,
+				Percent: int64((float64(count) / float64(message.Sum)) * 100),
+			})
+		}
+	}
+
+	// Sort the results by number of messages. We do this so the more accurate
+	// percentages appear at the top of the list
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Total < results[j].Total
 	})
 
 	return results, nil
@@ -401,6 +453,6 @@ type NullStore struct{}
 func (n *NullStore) GetDataPoints(*TimeRange, string, string) ([]DataPoint, error) {
 	return []DataPoint{}, nil
 }
-func (n *NullStore) SumByUser(*TimeRange, string, string) ([]UserSum, error) { return []UserSum{}, nil }
+func (n *NullStore) SumByUser(*TimeRange, string, string) ([]SumResp, error) { return []SumResp{}, nil }
 func (n *NullStore) GetAll() ([]DataPoint, error)                            { return []DataPoint{}, nil }
 func (n *NullStore) Close() error                                            { return nil }

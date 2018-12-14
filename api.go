@@ -16,12 +16,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var validGetParams = []string{"start-hour", "end-hour"}
+var (
+	validParams    = []string{"start-hour", "end-hour", "channel", "counter"}
+	requiredParams = []string{"channel", "counter"}
+)
 
 const (
-	listenAddr          = "0.0.0.0:2020"
-	missingChannelIDErr = "missing 'channel-id' from request context"
-	staticPath          = "html/"
+	listenAddr = "0.0.0.0:2020"
+	staticPath = "html/"
 )
 
 type ParamDoc struct {
@@ -45,7 +47,7 @@ type DocResponse struct {
 	Counters  []CounterDoc
 }
 
-type ItemResponse struct {
+type ItemResp struct {
 	StartHour string      `json:"start-hour"`
 	EndHour   string      `json:"end-hour"`
 	Items     interface{} `json:"items"`
@@ -84,12 +86,11 @@ func NewServer(store Storer, idMgr IDManager) *Server {
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/all", s.getAll)
 		r.Get("/", s.doc)
-		r.Route("/channels/{channel}", func(r chi.Router) {
-			r.Use(s.channelToID)
-			r.Get("/chart/{counter}", s.chart)
-			r.Get("/data/{counter}", s.getDataPoints)
-			r.Get("/sum/{counter}", s.getSum)
-		})
+		r.Get("/datapoints", s.getDataPoints)
+		r.Get("/sum", s.getSum)
+		r.Get("/percentage", s.getPercentage)
+		r.Get("/chart/sum", s.chartSum)
+		r.Get("/chart/percentage", s.chartPercentage)
 	})
 
 	s.server = &http.Server{Addr: listenAddr, Handler: r}
@@ -119,19 +120,33 @@ func (s *Server) doc(w http.ResponseWriter, r *http.Request) {
 		Endpoints: []EndpointDoc{
 			{Path: "/api", Desc: "this index"},
 			{
-				Path: "/api/channels/{channel}/data/{counter}",
-				Desc: "raw data points for the specific message counter",
+				Path: "/api/datapoints",
+				Desc: "get the raw data points for the specific message counter",
 				Params: []ParamDoc{
 					{Param: "start-hour", Desc: "retrieve counters starting at this hour"},
 					{Param: "end-hour", Desc: "retrieve counters ending at this hour"},
+					{Param: "channel", Desc: "channel to retrieve counters for"},
+					{Param: "counter", Desc: "name of the counter (See 'Counters' for valid counter names)"},
 				},
 			},
 			{
-				Path: "/api/channels/{channel}/sum/{counter}",
+				Path: "/api/sum",
 				Desc: "sum the data points by user for a counter and channel",
 				Params: []ParamDoc{
 					{Param: "start-hour", Desc: "retrieve counters starting at this hour"},
 					{Param: "end-hour", Desc: "retrieve counters ending at this hour"},
+					{Param: "channel", Desc: "channel to retrieve counters for"},
+					{Param: "counter", Desc: "name of the counter (See 'Counters' for valid counter names)"},
+				},
+			},
+			{
+				Path: "/api/percentage",
+				Desc: "calculate what percentage of the counter makes up the total number messages",
+				Params: []ParamDoc{
+					{Param: "start-hour", Desc: "retrieve counters starting at this hour"},
+					{Param: "end-hour", Desc: "retrieve counters ending at this hour"},
+					{Param: "channel", Desc: "channel to retrieve counters for"},
+					{Param: "counter", Desc: "name of the counter (See 'Counters' for valid counter names)"},
 				},
 			},
 		},
@@ -157,14 +172,14 @@ func (s *Server) getAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
-	if err := isValidParams(r, validGetParams); err != nil {
+	if err := isValidParams(r, validParams, requiredParams); err != nil {
 		abort(w, err, http.StatusBadRequest)
 		return
 	}
 
-	channelID, ok := r.Context().Value("channel-id").(string)
-	if !ok {
-		abort(w, errors.New(missingChannelIDErr), http.StatusBadRequest)
+	channelID, err := s.idMgr.GetChannelID(r.FormValue("channel"))
+	if err != nil {
+		abort(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -177,7 +192,7 @@ func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
 	// Get the data points from the database
 	data, err := s.store.GetDataPoints(
 		timeRange,
-		chi.URLParam(r, "counter"),
+		r.FormValue("counter"),
 		channelID)
 
 	if err != nil {
@@ -185,7 +200,7 @@ func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	toJSON(w, ItemResponse{
+	toJSON(w, ItemResp{
 		StartHour: timeRange.StartDate(),
 		EndHour:   timeRange.EndDate(),
 		Items:     data,
@@ -193,14 +208,14 @@ func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getSum(w http.ResponseWriter, r *http.Request) {
-	if err := isValidParams(r, validGetParams); err != nil {
+	if err := isValidParams(r, validParams, requiredParams); err != nil {
 		abort(w, err, http.StatusBadRequest)
 		return
 	}
 
-	channelID, ok := r.Context().Value("channel-id").(string)
-	if !ok {
-		abort(w, errors.New(missingChannelIDErr), http.StatusBadRequest)
+	channelID, err := s.idMgr.GetChannelID(r.FormValue("channel"))
+	if err != nil {
+		abort(w, err, http.StatusBadRequest)
 		return
 	}
 
@@ -213,40 +228,53 @@ func (s *Server) getSum(w http.ResponseWriter, r *http.Request) {
 	// aggregate the data points by user
 	data, err := s.store.SumByUser(
 		timeRange,
-		chi.URLParam(r, "counter"),
+		r.FormValue("counter"),
 		channelID)
 	if err != nil {
 		abort(w, err, http.StatusInternalServerError)
 		return
 	}
-	toJSON(w, ItemResponse{
+	toJSON(w, ItemResp{
 		StartHour: timeRange.StartDate(),
 		EndHour:   timeRange.EndDate(),
 		Items:     data,
 	})
 }
 
-// Middleware to convert channel name to channel id and place the result in the request context
-func (s *Server) channelToID(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		name := chi.URLParam(r, "channel")
-		if name == "" {
-			abort(w, errors.New("'channel' missing from request"), http.StatusBadRequest)
-			return
-		}
-		id, err := s.idMgr.GetChannelID(name)
-		if err != nil {
-			abort(w, err, http.StatusBadRequest)
-			return
-		}
-		ctx := context.WithValue(r.Context(), "channel-id", id)
-		next.ServeHTTP(w, r.WithContext(ctx))
+func (s *Server) getPercentage(w http.ResponseWriter, r *http.Request) {
+	if err := isValidParams(r, validParams, requiredParams); err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	channelID, err := s.idMgr.GetChannelID(r.FormValue("channel"))
+	if err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	timeRange, err := NewTimeRange(r.FormValue("start-hour"), r.FormValue("end-hour"))
+	if err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	results, err := s.store.PercentageByUser(timeRange, r.FormValue("counter"), channelID)
+	if err != nil {
+		abort(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	toJSON(w, ItemResp{
+		StartHour: timeRange.StartDate(),
+		EndHour:   timeRange.EndDate(),
+		Items:     results,
 	})
 }
 
 func abort(w http.ResponseWriter, err error, code int) {
 	GetLogger().WithField("prefix", "http").Errorf("HTTP: %s\n", err)
-	http.Error(w, http.StatusText(code), code)
+	http.Error(w, err.Error(), code)
 }
 
 func toJSON(w http.ResponseWriter, obj interface{}) {
@@ -259,14 +287,22 @@ func toJSON(w http.ResponseWriter, obj interface{}) {
 	w.Write(resp)
 }
 
-func isValidParams(r *http.Request, validParams []string) error {
+func isValidParams(r *http.Request, validParams []string, requiredParams []string) error {
 	if r.Form == nil {
 		r.ParseMultipartForm(32 << 20)
 	}
 
+	paramsMap := make(map[string]bool)
 	for key := range r.Form {
+		paramsMap[key] = true
 		if !slice.ContainsString(key, validParams, strings.ToLower) {
 			return fmt.Errorf("invalid parameter '%s'", key)
+		}
+	}
+
+	for _, key := range requiredParams {
+		if _, ok := paramsMap[key]; !ok {
+			return fmt.Errorf("parameter '%s' is required", key)
 		}
 	}
 	return nil
