@@ -5,12 +5,6 @@ slack:
   # Env: STATS_SLACK_TOKEN
   token: xoxb-12345125123457128357129-fake
 
-  # Currently we use the legacy API to retrieve channel and user names and ids
-  # Create a legacy token for your workspace here
-  # https://api.slack.com/custom-integrations/legacy-tokens
-  # Env: STATS_SLACK_LEGACY_TOKEN
-  legacy-token: xoxp-12342134012304812-1209481320912-1234213412-fake
-
 # Enable debug logging
 # Env: STATS_DEBUG
 debug: false

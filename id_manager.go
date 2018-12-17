@@ -54,7 +54,7 @@ type IDManage struct {
 func NewIdManager(conf Config) (IDManager, error) {
 	s := IDManage{
 		log:   GetLogger().WithField("prefix", "id-manager"),
-		token: conf.Slack.LegacyToken,
+		token: conf.Slack.Token,
 	}
 	// Populate our channel listing
 	if err := s.UpdateChannels(); err != nil {

@@ -7,10 +7,6 @@ services:
       # 'token' is a bot token from a slack app. Create a slack app here
       # https://api.slack.com/apps then get the bot token from 'OAuth & Permissions'
       - STATS_SLACK_TOKEN=xoxb-123421354-fake
-      # Currently we use the legacy API to retrieve channel and user names and ids
-      # Create a legacy token for your workspace here
-      # https://api.slack.com/custom-integrations/legacy-tokens
-      - STATS_SLACK_LEGACY_TOKEN=xoxp-123421412-fake
       # Enable debug logging
       - STATS_DEBUG=false
       # Must be true for notification to work

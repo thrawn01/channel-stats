@@ -36,8 +36,7 @@ type Config struct {
 }
 
 type SlackConfig struct {
-	LegacyToken string `json:"legacy-token" env:"STATS_SLACK_LEGACY_TOKEN"`
-	Token       string `json:"token" env:"STATS_SLACK_TOKEN"`
+	Token string `json:"token" env:"STATS_SLACK_TOKEN"`
 }
 
 type StoreConfig struct {
@@ -110,7 +109,7 @@ func LoadConfig() (Config, error) {
 		}
 	}
 
-	if err := RequiredFields(conf.Slack, []string{"LegacyToken", "Token"}); err != nil {
+	if err := RequiredFields(conf.Slack, []string{"Token"}); err != nil {
 		return conf, fmt.Errorf("config slack.%s", err)
 	}
 
