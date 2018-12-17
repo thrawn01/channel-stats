@@ -19,6 +19,7 @@ import (
 var (
 	validParams    = []string{"start-hour", "end-hour", "channel", "counter"}
 	requiredParams = []string{"channel", "counter"}
+	validCounters  = []string{"messages", "positive", "negative", "link", "emoji", "word-count"}
 )
 
 const (
@@ -272,6 +273,54 @@ func (s *Server) getPercentage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) chartPercentage(w http.ResponseWriter, r *http.Request) {
+	if err := isValidParams(r, validParams, requiredParams); err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	channelID, err := s.idMgr.GetChannelID(r.FormValue("channel"))
+	if err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	timeRange, err := NewTimeRange(r.FormValue("start-hour"), r.FormValue("end-hour"))
+	if err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	if err := RenderPercentage(s.store, w, timeRange, r.FormValue("counter"), channelID); err != nil {
+		abort(w, err, http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) chartSum(w http.ResponseWriter, r *http.Request) {
+	if err := isValidParams(r, validParams, requiredParams); err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	channelID, err := s.idMgr.GetChannelID(r.FormValue("channel"))
+	if err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	timeRange, err := NewTimeRange(r.FormValue("start-hour"), r.FormValue("end-hour"))
+	if err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	if err := RenderSum(s.store, w, timeRange, r.FormValue("counter"), channelID); err != nil {
+		abort(w, err, http.StatusInternalServerError)
+	}
+}
+
 func abort(w http.ResponseWriter, err error, code int) {
 	GetLogger().WithField("prefix", "http").Errorf("HTTP: %s\n", err)
 	http.Error(w, err.Error(), code)
@@ -295,7 +344,7 @@ func isValidParams(r *http.Request, validParams []string, requiredParams []strin
 	paramsMap := make(map[string]bool)
 	for key := range r.Form {
 		paramsMap[key] = true
-		if !slice.ContainsString(key, validParams, strings.ToLower) {
+		if !slice.ContainsString(strings.ToLower(key), validParams, nil) {
 			return fmt.Errorf("invalid parameter '%s'", key)
 		}
 	}
@@ -303,6 +352,14 @@ func isValidParams(r *http.Request, validParams []string, requiredParams []strin
 	for _, key := range requiredParams {
 		if _, ok := paramsMap[key]; !ok {
 			return fmt.Errorf("parameter '%s' is required", key)
+		}
+	}
+
+	// If we are expecting a counter
+	if slice.ContainsString("counter", requiredParams, nil) {
+		// Should be one of the valid counters
+		if !slice.ContainsString(r.Form.Get("counter"), validCounters, nil) {
+			return fmt.Errorf("invalid 'counter' must be one of '%s'", strings.Join(validCounters, ","))
 		}
 	}
 	return nil

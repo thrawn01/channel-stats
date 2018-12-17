@@ -18,18 +18,18 @@ type SlackBot struct {
 	server *http.Server
 	rtm    *slack.RTM
 	idMgr  IDManager
-	notify Notifier
+	mail   Mailer
 	store  Storer
 	conf   Config
 }
 
-func NewSlackBot(conf Config, store Storer, idMgr IDManager, notify Notifier) *SlackBot {
+func NewSlackBot(conf Config, store Storer, idMgr IDManager, mail Mailer) *SlackBot {
 	return &SlackBot{
-		log:    GetLogger().WithField("prefix", "slack"),
-		notify: notify,
-		idMgr:  idMgr,
-		store:  store,
-		conf:   conf,
+		log:   GetLogger().WithField("prefix", "slack"),
+		mail:  mail,
+		idMgr: idMgr,
+		store: store,
+		conf:  conf,
 	}
 }
 
@@ -54,7 +54,7 @@ func (s *SlackBot) Start() error {
 							continue
 						}
 
-						err := s.notify.Operator("channel-stats has been disconnected from " +
+						err := s.mail.Operator("channel-stats has been disconnected from " +
 							"slack for more than 30 seconds")
 						if err != nil {
 							s.log.Errorf("while sending notification - %s", err)

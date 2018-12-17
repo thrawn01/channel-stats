@@ -29,11 +29,11 @@ func main() {
 
 	channelstats.GetLogger().Infof("Starting Version: %s", Version)
 
-	// Can notify an operator of events
-	notify, err := channelstats.NewNotifier(conf)
+	// Can mailer an operator of events
+	mail, err := channelstats.NewMailer(conf)
 	checkErr(err)
 
-	checkErr(notify.Operator(fmt.Sprintf("[channel-stats] Started @ %s", time.Now())))
+	checkErr(mail.Operator(fmt.Sprintf("[channel-stats] Started @ %s", time.Now())))
 
 	// The ID manager keeps track of channel and user ids
 	idMgr, err := channelstats.NewIdManager(conf)
@@ -60,8 +60,12 @@ func main() {
 	checkErr(err)
 	defer store.Close()
 
+	// Generates reports for channels and emails them to users
+	/*reporter, err := channelstats.NewReporter(conf, mail, store)
+	checkErr(err)*/
+
 	// Start the slack bot
-	bot := channelstats.NewSlackBot(conf, store, idMgr, notify)
+	bot := channelstats.NewSlackBot(conf, store, idMgr, mail)
 
 	// Start the http server
 	server := channelstats.NewServer(store, idMgr)
@@ -76,6 +80,8 @@ func main() {
 				server.Stop()
 				// Stop the bot
 				bot.Stop()
+				// Stop the reporter
+				//reporter.Stop()
 				//os.Exit(1)
 			}
 		}

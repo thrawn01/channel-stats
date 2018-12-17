@@ -11,8 +11,9 @@ import (
 )
 
 type SlackChannelInfo struct {
-	Id   string
-	Name string
+	Name     string `json:"name"`
+	Id       string `json:"id"`
+	IsMember bool   `json:"is_member"`
 }
 
 type SlackChannelList struct {
@@ -63,6 +64,11 @@ func NewIdManager(conf Config) (IDManager, error) {
 		return nil, err
 	}
 	return &s, nil
+}
+
+func (s *IDManage) Channels() []SlackChannelInfo {
+	// TODO: Use the conversations API to retrieve the channel information
+	return nil
 }
 
 func (s *IDManage) UpdateUsers() error {

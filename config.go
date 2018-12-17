@@ -3,10 +3,12 @@ package channelstats
 import (
 	"flag"
 	"fmt"
+	"github.com/mailgun/holster/clock"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/fatih/structs"
 	"github.com/ghodss/yaml"
@@ -27,8 +29,10 @@ type Config struct {
 	// Store config
 	Store StoreConfig `json:"store"`
 
-	// Notification configuration
+	// Mailgun configuration
 	Mailgun MailgunConfig `json:"mailgun"`
+
+	Report ReportConfig `json:"report"`
 }
 
 type SlackConfig struct {
@@ -54,6 +58,23 @@ type MailgunConfig struct {
 
 	// The from email address given when sending operator emails
 	From string `json:"from" env:"STATS_MG_FROM"`
+
+	// Timeout for network operations when talking to mailgun
+	// (See http://golang.org/pkg/time/#ParseDuration for string format)
+	// Defaults to "20s" (20 Seconds)
+	Timeout clock.DurationJSON `json:"timeout" env:"STATS_MG_TIMEOUT"`
+}
+
+type ReportConfig struct {
+	// The cron like string the dictates when reports are sent to users
+	// (See https://godoc.org/github.com/robfig/cron#hdr-CRON_Expression_Format)
+	// Default is "0 0 0 * * SUN" - Run once a week, midnight on Sunday
+	Schedule string `json:"schedule" env:"STATS_REPORT_SCHEDULE"`
+
+	// The duration used to decide the start and end hour of the report
+	// (See http://golang.org/pkg/time/#ParseDuration for string format)
+	// Defaults to "168h" aka 7 days
+	ReportDuration clock.DurationJSON `json:"report-duration" env:"STATS_REPORT_DURATION"`
 }
 
 func LoadConfig() (Config, error) {
@@ -94,6 +115,9 @@ func LoadConfig() (Config, error) {
 	}
 
 	holster.SetDefault(&conf.Store.DataDir, "./badger-db")
+	holster.SetDefault(&conf.Report.Schedule, "0 0 0 * * SUN")
+	holster.SetDefault(&conf.Report.ReportDuration, time.Hour*168)
+	holster.SetDefault(&conf.Mailgun.Timeout, time.Second*20)
 
 	return conf, nil
 }
@@ -124,7 +148,16 @@ func SrcFromEnv(obj interface{}) {
 
 	for _, field := range s.Fields() {
 		if field.Kind() == reflect.Struct {
-			SrcFromEnv(field)
+			// Handle Durations
+			if _, ok := field.Value().(clock.DurationJSON); ok {
+				if tag := field.Tag("env"); tag != "" {
+					if value := os.Getenv(tag); value != "" {
+						field.Set(clock.NewDurationJSONOrPanic(tag))
+					}
+				}
+			} else {
+				SrcFromEnv(field)
+			}
 			continue
 		}
 

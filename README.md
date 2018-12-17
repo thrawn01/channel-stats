@@ -65,7 +65,7 @@ $ curl 'http://localhost:2020/api/sum?channel=general&counter=emoji&start-hour=2
 ```
 
 ### Retrieve Counter Percentages
-Calls to `/percentage` retrieve a summation and percentage of total messages for a specified duration. This is useful 
+Calls to `/percentage` retrieve a summation and percentage of total messages for a specified duration. This is useful
 for figuring out what percentage of total messages have negative or positive sentiment.
 
 ```

@@ -26,6 +26,7 @@ require (
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
 	github.com/nlopes/slack v0.0.0-20180413165149-3472fa2dd034
 	github.com/pkg/errors v0.8.0
+	github.com/robfig/cron v0.0.0-20180505203441-b41be1df6967
 	github.com/sirupsen/logrus v1.2.0
 	github.com/stretchr/testify v1.2.2
 	github.com/wcharczuk/go-chart v2.0.1+incompatible
