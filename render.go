@@ -69,14 +69,22 @@ func renderBarChart(w io.Writer, bars []chart.Value) error {
 		XAxis: chart.Style{
 			Show:     true,
 			FontSize: 13,
+			//TextHorizontalAlign: chart.Text,
+			//TextVerticalAlign: chart.TextVerticalAlignBottom,
+			//TextWrap:          chart.TextWrapNone,
 		},
 		YAxis: chart.YAxis{
 			Style: chart.Style{
 				Show:     true,
 				FontSize: 12,
 			},
+			ValueFormatter: FloatFormatter,
 		},
 		Bars: bars,
 	}
 	return sbc.Render(chart.PNG, w)
+}
+
+func FloatFormatter(v interface{}) string {
+	return chart.FloatValueFormatterWithFormat(v, "%.f")
 }

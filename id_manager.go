@@ -43,6 +43,7 @@ type IDManager interface {
 }
 
 type IDManage struct {
+	channelList   SlackChannelList
 	channelByName map[string]string
 	channelByID   map[string]string
 	userByName    map[string]string
@@ -52,30 +53,29 @@ type IDManage struct {
 }
 
 func NewIdManager(conf Config) (IDManager, error) {
-	s := IDManage{
+	im := IDManage{
 		log:   GetLogger().WithField("prefix", "id-manager"),
 		token: conf.Slack.Token,
 	}
 	// Populate our channel listing
-	if err := s.UpdateChannels(); err != nil {
+	if err := im.UpdateChannels(); err != nil {
 		return nil, err
 	}
-	if err := s.UpdateUsers(); err != nil {
+	if err := im.UpdateUsers(); err != nil {
 		return nil, err
 	}
-	return &s, nil
+	return &im, nil
 }
 
-func (s *IDManage) Channels() []SlackChannelInfo {
-	// TODO: Use the conversations API to retrieve the channel information
-	return nil
+func (im *IDManage) Channels() []SlackChannelInfo {
+	return im.channelList.Channels
 }
 
-func (s *IDManage) UpdateUsers() error {
+func (im *IDManage) UpdateUsers() error {
 	params := url.Values{}
-	params.Add("token", s.token)
+	params.Add("token", im.token)
 
-	s.log.Info("Fetching User Listing...")
+	im.log.Info("Fetching User Listing...")
 	url := fmt.Sprintf("https://slack.com/api/users.list?%s", params.Encode())
 	resp, err := http.Get(url)
 	if err != nil {
@@ -96,22 +96,22 @@ func (s *IDManage) UpdateUsers() error {
 	}
 
 	// Extract user name and id's
-	s.userByName = make(map[string]string, len(userList.Members))
-	s.userByID = make(map[string]string, len(userList.Members))
+	im.userByName = make(map[string]string, len(userList.Members))
+	im.userByID = make(map[string]string, len(userList.Members))
 	for _, user := range userList.Members {
-		s.log.Debugf("Found User: %s - %s", user.Name, user.Id)
-		s.userByName[user.Name] = user.Id
-		s.userByID[user.Id] = user.Name
+		im.log.Debugf("Found User: %s - %s", user.Name, user.Id)
+		im.userByName[user.Name] = user.Id
+		im.userByID[user.Id] = user.Name
 	}
 
 	return nil
 }
 
-func (s *IDManage) UpdateChannels() error {
+func (im *IDManage) UpdateChannels() error {
 	params := url.Values{}
-	params.Add("token", s.token)
+	params.Add("token", im.token)
 
-	s.log.Info("Fetching Channel Listing...")
+	im.log.Info("Fetching Channel Listing...")
 	url := fmt.Sprintf("https://slack.com/api/channels.list?%s", params.Encode())
 	resp, err := http.Get(url)
 	if err != nil {
@@ -120,52 +120,51 @@ func (s *IDManage) UpdateChannels() error {
 	defer resp.Body.Close()
 
 	// Parse the response
-	var channelList SlackChannelList
-	err = json.NewDecoder(resp.Body).Decode(&channelList)
+	err = json.NewDecoder(resp.Body).Decode(&im.channelList)
 	if err != nil {
 		return errors.Wrapf(err, "GET '%s' failed during json decode", url)
 	}
 
 	// Handle slack error
-	if !channelList.Ok {
-		return errors.Errorf("GET '%s' failed with slack error '%s'", url, channelList.Error)
+	if !im.channelList.Ok {
+		return errors.Errorf("GET '%s' failed with slack error '%s'", url, im.channelList.Error)
 	}
 
 	// Extract channel name and id's
-	s.channelByName = make(map[string]string, len(channelList.Channels))
-	s.channelByID = make(map[string]string, len(channelList.Channels))
-	for _, channel := range channelList.Channels {
-		s.log.Debugf("Found Channel: %s - %s", channel.Name, channel.Id)
-		s.channelByName[channel.Name] = channel.Id
-		s.channelByID[channel.Id] = channel.Name
+	im.channelByName = make(map[string]string, len(im.channelList.Channels))
+	im.channelByID = make(map[string]string, len(im.channelList.Channels))
+	for _, channel := range im.channelList.Channels {
+		im.log.Debugf("Found Channel: %s - %s", channel.Name, channel.Id)
+		im.channelByName[channel.Name] = channel.Id
+		im.channelByID[channel.Id] = channel.Name
 	}
 
 	return nil
 }
 
-func (s *IDManage) GetChannelID(name string) (string, error) {
-	if id, exists := s.channelByName[name]; exists {
+func (im *IDManage) GetChannelID(name string) (string, error) {
+	if id, exists := im.channelByName[name]; exists {
 		return id, nil
 	}
 	return "(unknown)", errors.Errorf("channel '%s' not found", name)
 }
 
-func (s *IDManage) GetChannelName(id string) (string, error) {
-	if id, exists := s.channelByID[id]; exists {
+func (im *IDManage) GetChannelName(id string) (string, error) {
+	if id, exists := im.channelByID[id]; exists {
 		return id, nil
 	}
 	return "(unknown)", errors.Errorf("channel id '%s' not found", id)
 }
 
-func (s *IDManage) GetUserID(name string) (string, error) {
-	if id, exists := s.userByName[name]; exists {
+func (im *IDManage) GetUserID(name string) (string, error) {
+	if id, exists := im.userByName[name]; exists {
 		return id, nil
 	}
 	return "(unknown)", errors.Errorf("user '%s' not found", name)
 }
 
-func (s *IDManage) GetUserName(id string) (string, error) {
-	if id, exists := s.userByID[id]; exists {
+func (im *IDManage) GetUserName(id string) (string, error) {
+	if id, exists := im.userByID[id]; exists {
 		return id, nil
 	}
 	return "(unknown)", errors.Errorf("user id '%s' not found", id)

@@ -5,6 +5,9 @@ VERSION=$(shell cat version)
 
 LDFLAGS="-X main.Version=$(VERSION)"
 
+generate:
+	go generate ./html
+
 docker:
 	docker build --build-arg VERSION=$(VERSION) -t thrawn01/channel-stats:$(VERSION) .
 	docker tag thrawn01/channel-stats:$(VERSION) thrawn01/channel-stats:latest

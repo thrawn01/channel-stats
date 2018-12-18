@@ -29,6 +29,7 @@ require (
 	github.com/robfig/cron v0.0.0-20180505203441-b41be1df6967
 	github.com/sirupsen/logrus v1.2.0
 	github.com/stretchr/testify v1.2.2
+	github.com/tmthrgd/go-bindata v0.0.0-20180829002824-c8d03665bae9 // indirect
 	github.com/wcharczuk/go-chart v2.0.1+incompatible
 	github.com/x-cray/logrus-prefixed-formatter v0.5.2
 	golang.org/x/image v0.0.0-20181116024801-cd38e8056d9b // indirect

@@ -6,7 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/robfig/cron"
 	"github.com/sirupsen/logrus"
-	"github.com/thrawn01/channel-stats/assets"
+	"github.com/thrawn01/channel-stats/html"
 	"html/template"
 	"io"
 	"time"
@@ -106,7 +106,7 @@ func (r *Report) genHtml(file string, chanName string) ([]byte, error) {
 		Name string
 	}
 
-	content, err := assets.Get(file)
+	content, err := html.Get(file)
 
 	t, err := template.New("email").Parse(string(content))
 	if err != nil {
