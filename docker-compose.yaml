@@ -22,8 +22,17 @@ services:
       - STATS_MG_REPORT_ADDR=my-name@your.domain.com
       # The from email address given when sending operator emails
       - STATS_MG_FROM=channel-stats@your.odmain.com
+      # Timeout for network operations when talking to mailgun
+      # (See http://golang.org/pkg/time/#ParseDuration for string format)
+      - STATS_MG_TIMEOUT=20s
       # Location of the database on disk, should be changed if you
       # wish to persist the data to a mounted directory
       - STATS_STORE_DATA_DIR=/badger-db
+      # The cron like string the dictates when reports are sent to users
+      # (See https://godoc.org/github.com/robfig/cron#hdr-CRON_Expression_Format)
+      - STATS_REPORT_SCHEDULE="0 0 0 * * SUN"
+      # The duration used to decide the start and end hour of the report
+      # (See http://golang.org/pkg/time/#ParseDuration for string format)
+      - STATS_REPORT_DURATION=168h
     ports:
       - "2020:2020"

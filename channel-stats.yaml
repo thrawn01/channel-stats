@@ -37,10 +37,30 @@ mailgun:
   # Env: STATS_MG_FROM
   from: channel-stats@your-domain.com
 
+  # Timeout for network operations when talking to mailgun
+  # (See http://golang.org/pkg/time/#ParseDuration for string format)
+  # Defaults to "20s" (20 Seconds)
+  # Env: STATS_MG_TIMEOUT
+  timeout: 20s
+
 # badger data config
 store:
   # Location of the database on disk, should be changed if you
   # wish to persist the data to a mounted directory
   # Env: STATS_STORE_DATA_DIR
   data-dir: ./badger-db
+
+# Periodic report config
+report:
+  # The cron like string the dictates when reports are sent to users
+  # (See https://godoc.org/github.com/robfig/cron#hdr-CRON_Expression_Format)
+  # Default is "0 0 0 * * SUN" - Run once a week, midnight on Sunday
+  # Env: STATS_REPORT_SCHEDULE
+  schedule: "0 0 0 * * SUN"
+
+  # The duration used to decide the start and end hour of the report
+  # (See http://golang.org/pkg/time/#ParseDuration for string format)
+  # Defaults to "168h" aka 7 days
+  # Env: STATS_REPORT_DURATION
+  report-duration: 168h
 
