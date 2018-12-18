@@ -61,8 +61,8 @@ func main() {
 	defer store.Close()
 
 	// Generates reports for channels and emails them to users
-	/*reporter, err := channelstats.NewReporter(conf, mail, store)
-	checkErr(err)*/
+	reporter, err := channelstats.NewReporter(conf, idMgr, mail, store)
+	checkErr(err)
 
 	// Start the slack bot
 	bot := channelstats.NewSlackBot(conf, store, idMgr, mail)
@@ -81,7 +81,7 @@ func main() {
 				// Stop the bot
 				bot.Stop()
 				// Stop the reporter
-				//reporter.Stop()
+				reporter.Stop()
 				//os.Exit(1)
 			}
 		}

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-type RenderFunc func(store Storer, w io.Writer, timeRange *TimeRange, counter, channelID string) error
+type RenderFunc func(store Storer, w io.Writer, timeRange *TimeRange, channelID, counter string) error
 
 // Any struct that can return a list of channels to create reports for
 type ChanLister interface {
@@ -20,7 +20,6 @@ type ChanLister interface {
 }
 
 type Reporter interface {
-	Start() error
 	Stop()
 }
 
@@ -42,47 +41,51 @@ func NewReporter(conf Config, list ChanLister, notify Mailer, store Storer) (Rep
 		conf:  conf,
 		list:  list,
 	}
-	return &r, r.Start()
+	return &r, r.start()
 }
 
-func (r *Report) Start() error {
-	err := r.cron.AddFunc(r.conf.Report.Schedule, func() {
-		timeRange := toTimeRange(r.conf.Report.ReportDuration.Duration)
+func (r *Report) start() error {
+	//err := r.cron.AddFunc(r.conf.Report.Schedule, func() {
+	timeRange := toTimeRange(r.conf.Report.ReportDuration.Duration)
+	r.log.Debugf("Creating report for %s to %s", timeRange.Start, timeRange.End)
 
-		for _, channel := range r.list.Channels() {
-			// Skip channels the bot is not in
-			if !channel.IsMember {
-				continue
-			}
-
-			html, err := r.genHtml("templates/email.tmpl", channel.Name)
-			if err != nil {
-				r.log.Errorf("during email generate: %s", err)
-			}
-
-			data := ReportData{
-				Images: make(map[string][]byte),
-				Html:   html,
-			}
-
-			// Generate the images for the report
-			data.Images["most-active"] = r.genImage(RenderSum, timeRange, channel.Id, "message")
-			data.Images["top-links"] = r.genImage(RenderSum, timeRange, channel.Id, "link")
-			data.Images["top-emoji"] = r.genImage(RenderSum, timeRange, channel.Id, "emoji")
-			data.Images["most-negative"] = r.genImage(RenderPercentage, timeRange, channel.Id, "negative")
-			data.Images["most-positive"] = r.genImage(RenderPercentage, timeRange, channel.Id, "positive")
-
-			// Email the report
-			if err := r.mail.Report(channel.Name, data); err != nil {
-				r.log.Errorf("while sending report: %s")
-			}
+	for _, channel := range r.list.Channels() {
+		// Skip channels the bot is not in
+		if !channel.IsMember {
+			continue
 		}
-	})
-	if err != nil {
-		return err
-	}
 
-	r.cron.Start()
+		html, err := r.genHtml("templates/email.tmpl", channel.Name)
+		if err != nil {
+			r.log.Errorf("during email generate: %s", err)
+			return nil
+		}
+
+		data := ReportData{
+			Images: make(map[string][]byte),
+			Html:   html,
+		}
+
+		// Generate the images for the report
+		data.Images["most-active.png"] = r.genImage(RenderSum, timeRange, channel.Id, "messages")
+		/*data.Images["top-links.png"] = r.genImage(RenderSum, timeRange, channel.Id, "link")
+		data.Images["top-emoji.png"] = r.genImage(RenderSum, timeRange, channel.Id, "emoji")
+		data.Images["most-negative.png"] = r.genImage(RenderPercentage, timeRange, channel.Id, "negative")
+		data.Images["most-positive.png"] = r.genImage(RenderPercentage, timeRange, channel.Id, "positive")*/
+
+		//spew.Dump(data)
+
+		// Email the report
+		if err := r.mail.Report(channel.Name, data); err != nil {
+			r.log.Errorf("while sending report: %s", err)
+		}
+	}
+	//})
+	//if err != nil {
+	//	return err
+	//}
+
+	//r.cron.Start()
 	return nil
 }
 
@@ -90,13 +93,12 @@ func (r *Report) Stop() {
 	r.cron.Stop()
 }
 
-func (r *Report) genImage(render RenderFunc, timeRange *TimeRange, channel, counter string) []byte {
+func (r *Report) genImage(render RenderFunc, timeRange *TimeRange, channelID, counter string) []byte {
 	var buf bytes.Buffer
 	w := bufio.NewWriter(&buf)
 
-	if err := render(r.store, w, timeRange, channel, counter); err != nil {
-		r.log.Errorf("while rendering image for '%s' with range '%+v' on channel '%s'",
-			counter, timeRange, channel)
+	if err := render(r.store, w, timeRange, channelID, counter); err != nil {
+		r.log.Errorf("while rendering image for channel: '%s' '%s': %s", channelID, counter, err)
 	}
 	return buf.Bytes()
 }
@@ -107,6 +109,9 @@ func (r *Report) genHtml(file string, chanName string) ([]byte, error) {
 	}
 
 	content, err := html.Get(file)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading asset file '%s'", file)
+	}
 
 	t, err := template.New("email").Parse(string(content))
 	if err != nil {
@@ -119,12 +124,16 @@ func (r *Report) genHtml(file string, chanName string) ([]byte, error) {
 		return nil, errors.Wrapf(err, "while executing template '%s'", file)
 	}
 
+	if err = w.Flush(); err != nil {
+		return nil, errors.Wrap(err, "while flushing template buffer")
+	}
+
 	return buf.Bytes(), nil
 }
 
 func toTimeRange(duration time.Duration) *TimeRange {
-	startHour := time.Now().UTC()
-	endHour := startHour.Add(-duration)
+	endHour := time.Now().UTC()
+	startHour := endHour.Add(-duration)
 	return &TimeRange{
 		Start: startHour,
 		End:   endHour,

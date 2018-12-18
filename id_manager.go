@@ -40,6 +40,7 @@ type IDManager interface {
 	GetChannelName(id string) (string, error)
 	GetUserID(name string) (string, error)
 	GetUserName(id string) (string, error)
+	Channels() []SlackChannelInfo
 }
 
 type IDManage struct {

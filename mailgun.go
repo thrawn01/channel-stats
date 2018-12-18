@@ -58,14 +58,19 @@ func (m *Mailgun) Report(channelName string, data ReportData) error {
 		return nil
 	}
 
+	// Create a subject for the report
 	subject := fmt.Sprintf("[channel-stats] Report for %s", channelName)
-	message := m.mg.NewMessage(m.conf.Mailgun.From, subject, string(data.Html), m.conf.Mailgun.ReportAddr)
+	// Create a message with no text body
+	message := m.mg.NewMessage(m.conf.Mailgun.From, subject, "", m.conf.Mailgun.ReportAddr)
+	// Send the HTML to mailgun for MIME encoding
+	message.SetHtml(string(data.Html))
+
 	for file, contents := range data.Images {
 		message.AddBufferAttachment(file, contents)
 	}
 	_, id, err := m.mg.Send(message)
 	if err != nil {
-		return errors.Wrap(err, "while report via Mailgun")
+		return err
 	}
 	m.log.Infof("Sent report via mailgun (%s)", id)
 	return nil

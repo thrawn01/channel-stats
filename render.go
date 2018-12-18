@@ -6,8 +6,8 @@ import (
 	"sort"
 )
 
-func RenderPercentage(store Storer, w io.Writer, timeRange *TimeRange, counter, channelID string) error {
-	totals, err := store.PercentageByUser(timeRange, counter, channelID)
+func RenderPercentage(store Storer, w io.Writer, timeRange *TimeRange, channelID, counter string) error {
+	totals, err := store.PercentageByUser(timeRange, channelID, counter)
 	if err != nil {
 		return err
 	}
@@ -31,8 +31,8 @@ func RenderPercentage(store Storer, w io.Writer, timeRange *TimeRange, counter, 
 	return renderBarChart(w, dps)
 }
 
-func RenderSum(store Storer, w io.Writer, timeRange *TimeRange, counter, channelID string) error {
-	totals, err := store.SumByUser(timeRange, counter, channelID)
+func RenderSum(store Storer, w io.Writer, timeRange *TimeRange, channelID, counter string) error {
+	totals, err := store.SumByUser(timeRange, channelID, counter)
 	if err != nil {
 		return err
 	}

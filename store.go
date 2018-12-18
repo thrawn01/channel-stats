@@ -27,9 +27,9 @@ var linkRegex = regexp.MustCompile(`(http://|https://)`)
 var emojiRegex = regexp.MustCompile(`:([a-z0-9_\+\-]+):`)
 
 type Storer interface {
-	PercentageByUser(timeRange *TimeRange, dataType, channelID string) ([]PercentageResp, error)
-	GetDataPoints(*TimeRange, string, string) ([]DataPoint, error)
+	PercentageByUser(*TimeRange, string, string) ([]PercentageResp, error)
 	SumByUser(*TimeRange, string, string) ([]SumResp, error)
+	GetDataPoints(*TimeRange, string, string) ([]DataPoint, error)
 	HandleReactionAdded(*slack.ReactionAddedEvent) error
 	HandleMessage(*slack.MessageEvent) error
 	GetAll() ([]DataPoint, error)
@@ -69,7 +69,7 @@ type DataPoint struct {
 	UserName    string
 	ChannelID   string
 	ChannelName string
-	DataType    string
+	Counter     string
 	Value       int64
 }
 
@@ -87,7 +87,7 @@ func DataPointFrom(item *badger.Item) (DataPoint, error) {
 
 	return DataPoint{
 		Hour:      parts[0],
-		DataType:  parts[1],
+		Counter:   parts[1],
 		ChannelID: parts[2],
 		UserID:    parts[3],
 		Value:     valueInt,
@@ -95,11 +95,11 @@ func DataPointFrom(item *badger.Item) (DataPoint, error) {
 }
 
 func (s *DataPoint) Key() []byte {
-	return []byte(fmt.Sprintf("%s/%s/%s/%s", s.Hour, s.DataType, s.ChannelID, s.UserID))
+	return []byte(fmt.Sprintf("%s/%s/%s/%s", s.Hour, s.Counter, s.ChannelID, s.UserID))
 }
 
 func (s DataPoint) PrefixKey() []byte {
-	return []byte(fmt.Sprintf("%s/%s/%s", s.Hour, s.DataType, s.ChannelID))
+	return []byte(fmt.Sprintf("%s/%s/%s", s.Hour, s.Counter, s.ChannelID))
 }
 
 func (s *DataPoint) ResolveID(idMgr IDManager) (err error) {
@@ -115,15 +115,15 @@ func (s *DataPoint) EncodeValue() []byte {
 	return []byte(fmt.Sprintf("%d", s.Value))
 }
 
-func (s *Store) GetDataPoints(timeRange *TimeRange, dataType, channelID string) ([]DataPoint, error) {
-	s.log.Debugf("GetDataPoints(%+v, %s, %s)", *timeRange, dataType, channelID)
+func (s *Store) GetDataPoints(timeRange *TimeRange, channelID, counter string) ([]DataPoint, error) {
+	s.log.Debugf("GetDataPoints(%+v, %s, %s)", *timeRange, counter, channelID)
 	resultChan := make(chan DataPoint, 5)
 
 	go func() {
 		fan := holster.NewFanOut(5)
 		for _, hour := range timeRange.ByHour() {
 			fan.Run(func(data interface{}) error {
-				key := DataPoint{Hour: data.(string), DataType: dataType, ChannelID: channelID}.PrefixKey()
+				key := DataPoint{Hour: data.(string), Counter: counter, ChannelID: channelID}.PrefixKey()
 				dps, err := s.GetByPrefix(key)
 				if err != nil {
 					return errors.Wrapf(err, "during while getting data points for prefix '%s'", key)
@@ -152,10 +152,10 @@ type SumResp struct {
 	Sum  int64  `json:"sum"`
 }
 
-func (s *Store) SumByUser(timeRange *TimeRange, dataType, channelID string) ([]SumResp, error) {
+func (s *Store) SumByUser(timeRange *TimeRange, channelID, counter string) ([]SumResp, error) {
 	var results []SumResp
 
-	dataPoints, err := s.GetDataPoints(timeRange, dataType, channelID)
+	dataPoints, err := s.GetDataPoints(timeRange, channelID, counter)
 	if err != nil {
 		return nil, err
 	}
@@ -192,15 +192,15 @@ type PercentageResp struct {
 	Percent int64 `json:"percentage"`
 }
 
-func (s *Store) PercentageByUser(timeRange *TimeRange, dataType, channelID string) ([]PercentageResp, error) {
+func (s *Store) PercentageByUser(timeRange *TimeRange, channelID, counter string) ([]PercentageResp, error) {
 	// Get the total number of messages for the channel during this time
-	messages, err := s.SumByUser(timeRange, "messages", channelID)
+	messages, err := s.SumByUser(timeRange, channelID, "messages")
 	if err != nil {
 		return nil, err
 	}
 
 	// Get the data type counts during this time
-	counters, err := s.SumByUser(timeRange, dataType, channelID)
+	counters, err := s.SumByUser(timeRange, channelID, counter)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func (s *Store) HandleReactionAdded(ev *slack.ReactionAddedEvent) error {
 	}
 
 	return s.db.Update(func(txn *badger.Txn) error {
-		dp.DataType = "emoji"
+		dp.Counter = "emoji"
 		err := saveDataPoint(txn, dp)
 		if err != nil {
 			return errors.Wrapf(err, "while storing 'messages' data point")
@@ -331,7 +331,7 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 	// Start a badger transaction
 	return s.db.Update(func(txn *badger.Txn) error {
 		// Count Messages
-		dp.DataType = "messages"
+		dp.Counter = "messages"
 		err := saveDataPoint(txn, dp)
 		if err != nil {
 			return errors.Wrapf(err, "while storing 'messages' data point")
@@ -339,14 +339,14 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 
 		result := SentimentAnalysis(ev.Text)
 		if result.Score > 0 {
-			dp.DataType = "positive"
+			dp.Counter = "positive"
 			err = saveDataPoint(txn, dp)
 			if err != nil {
 				return errors.Wrapf(err, "while storing 'positive' data point")
 			}
 		}
 		if result.Score < 0 {
-			dp.DataType = "negative"
+			dp.Counter = "negative"
 			if err = saveDataPoint(txn, dp); err != nil {
 				return errors.Wrapf(err, "while storing 'negative' data point")
 			}
@@ -354,7 +354,7 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 
 		// Link counter
 		if HasLink(ev.Text) {
-			dp.DataType = "link"
+			dp.Counter = "link"
 			if err = saveDataPoint(txn, dp); err != nil {
 				return errors.Wrapf(err, "while storing 'link' data point")
 			}
@@ -362,7 +362,7 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 
 		// Emoji counter
 		if HasEmoji(ev.Text) {
-			dp.DataType = "emoji"
+			dp.Counter = "emoji"
 			if err = saveDataPoint(txn, dp); err != nil {
 				return errors.Wrapf(err, "while storing 'emoji' data point")
 			}
@@ -370,7 +370,7 @@ func (s *Store) HandleMessage(ev *slack.MessageEvent) error {
 
 		// Count words
 		count := CountWords(ev.Text)
-		dp.DataType = "word-count"
+		dp.Counter = "word-count"
 		dp.Value = count
 		if err = saveDataPoint(txn, dp); err != nil {
 			return errors.Wrapf(err, "while storing 'word-count' data point")

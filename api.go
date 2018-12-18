@@ -193,8 +193,8 @@ func (s *Server) getDataPoints(w http.ResponseWriter, r *http.Request) {
 	// Get the data points from the database
 	data, err := s.store.GetDataPoints(
 		timeRange,
-		r.FormValue("counter"),
-		channelID)
+		channelID,
+		r.FormValue("counter"))
 
 	if err != nil {
 		abort(w, err, http.StatusInternalServerError)
@@ -229,8 +229,8 @@ func (s *Server) getSum(w http.ResponseWriter, r *http.Request) {
 	// aggregate the data points by user
 	data, err := s.store.SumByUser(
 		timeRange,
-		r.FormValue("counter"),
-		channelID)
+		channelID,
+		r.FormValue("counter"))
 	if err != nil {
 		abort(w, err, http.StatusInternalServerError)
 		return
@@ -260,7 +260,7 @@ func (s *Server) getPercentage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := s.store.PercentageByUser(timeRange, r.FormValue("counter"), channelID)
+	results, err := s.store.PercentageByUser(timeRange, channelID, r.FormValue("counter"))
 	if err != nil {
 		abort(w, err, http.StatusInternalServerError)
 		return
@@ -292,7 +292,7 @@ func (s *Server) chartPercentage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "image/png")
-	if err := RenderPercentage(s.store, w, timeRange, r.FormValue("counter"), channelID); err != nil {
+	if err := RenderPercentage(s.store, w, timeRange, channelID, r.FormValue("counter")); err != nil {
 		abort(w, err, http.StatusInternalServerError)
 	}
 }
@@ -316,7 +316,7 @@ func (s *Server) chartSum(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "image/png")
-	if err := RenderSum(s.store, w, timeRange, r.FormValue("counter"), channelID); err != nil {
+	if err := RenderSum(s.store, w, timeRange, channelID, r.FormValue("counter")); err != nil {
 		abort(w, err, http.StatusInternalServerError)
 	}
 }

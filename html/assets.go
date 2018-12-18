@@ -5,15 +5,17 @@ package html
 import (
 	"bytes"
 	"os"
+	"path"
 )
 
 func Get(file string) ([]byte, error) {
-	if _, err := os.Stat(file); os.IsNotExist(err) {
+	filePath := path.Join("./html", file)
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return Asset(file)
 	}
 
 	// First attempt to load the file from disk
-	f, err := os.Open(file)
+	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
