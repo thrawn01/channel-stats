@@ -53,7 +53,10 @@ type MailgunConfig struct {
 	Domain string `json:"domain" env:"STATS_MG_DOMAIN"`
 
 	// The email address of the operator of the bot
-	Operator string `json:"operator" env:"STATS_MG_OPERATOR"`
+	OperatorAddr string `json:"operator-address" env:"STATS_MG_OPERATOR_ADDR"`
+
+	// The email address reports are sent to (Could be an mailing list address)
+	ReportAddr string `json:"report-address" env:"STATS_MG_REPORT_ADDR"`
 
 	// The from email address given when sending operator emails
 	From string `json:"from" env:"STATS_MG_FROM"`
@@ -104,7 +107,7 @@ func LoadConfig() (Config, error) {
 
 	if conf.Mailgun.Enabled {
 		// Ensure mailgun required fields are provided
-		if err := RequiredFields(conf.Mailgun, []string{"APIKey", "Domain", "Operator", "From"}); err != nil {
+		if err := RequiredFields(conf.Mailgun, []string{"APIKey", "Domain", "From"}); err != nil {
 			return conf, fmt.Errorf("config mailgun.%s if mailgun.enabled = true", err)
 		}
 	}

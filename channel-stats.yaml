@@ -26,8 +26,12 @@ mailgun:
   domain: your-domain.com
 
   # The email address of the operator of the bot
-  # Env: STATS_MG_OPERATOR
-  operator: operator@your-domain.com
+  # Env: STATS_MG_OPERATOR_ADDR
+  operator-address: operator@your-domain.com
+
+  # The email address reports are sent to (Could be an mailing list address)
+  # Env: STATS_MG_REPORT_ADDR
+  report-address: my-name@your-domain.com
 
   # The from email address given when sending operator emails
   # Env: STATS_MG_FROM

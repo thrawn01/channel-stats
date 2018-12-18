@@ -1,14 +1,11 @@
 package channelstats
 
 import (
+	"fmt"
 	"github.com/mailgun/mailgun-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"net/http"
-)
-
-const (
-	mgSubject = "[channel-stats] Operator Notification"
 )
 
 type ReportData struct {
@@ -55,19 +52,39 @@ func NewMailgunNotifier(conf Config) (Mailer, error) {
 }
 
 // Send a report to the designated email address (could be mailing list)
-func (m *Mailgun) Report(channel string, data ReportData) error {
+func (m *Mailgun) Report(channelName string, data ReportData) error {
+	if m.conf.Mailgun.ReportAddr == "" {
+		m.log.Errorf("mailgun.enabled = true; however mailgun.report-address is empty; skipping..")
+		return nil
+	}
+
+	subject := fmt.Sprintf("[channel-stats] Report for %s", channelName)
+	message := m.mg.NewMessage(m.conf.Mailgun.From, subject, string(data.Html), m.conf.Mailgun.ReportAddr)
+	for file, contents := range data.Images {
+		message.AddBufferAttachment(file, contents)
+	}
+	_, id, err := m.mg.Send(message)
+	if err != nil {
+		return errors.Wrap(err, "while report via Mailgun")
+	}
+	m.log.Infof("Sent report via mailgun (%s)", id)
 	return nil
 }
 
 // Send an email message to the designated operator the this chat bot
 func (m *Mailgun) Operator(msg string) error {
-	message := m.mg.NewMessage(m.conf.Mailgun.From, mgSubject, msg, m.conf.Mailgun.Operator)
+	if m.conf.Mailgun.OperatorAddr == "" {
+		m.log.Errorf("mailgun.enabled = true; however mailgun.operator-address is empty; skipping..")
+		return nil
+	}
+
+	message := m.mg.NewMessage(m.conf.Mailgun.From, "[channel-stats] Operator Notification",
+		msg, m.conf.Mailgun.OperatorAddr)
 	_, id, err := m.mg.Send(message)
 	if err != nil {
-		return errors.Wrap(err, "while sending email notification via Mailgun")
+		return errors.Wrap(err, "while sending operator notification via Mailgun")
 	}
-	m.log.Infof("Sent notification via mailgun (%s)", id)
-
+	m.log.Infof("Notified operator via mailgun (%s)", id)
 	return nil
 }
 

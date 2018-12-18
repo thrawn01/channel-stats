@@ -17,7 +17,9 @@ services:
       # Name of verified domain you have registered with mailgun
       - STATS_MG_DOMAIN=your.domain.com
       # The email address of the operator of the bot
-      - STATS_MG_OPERATOR=admin@your.domain.com
+      - STATS_MG_OPERATOR_ADDR=admin@your.domain.com
+      # The email address reports are sent to (Could be an mailing list address)
+      - STATS_MG_REPORT_ADDR=my-name@your.domain.com
       # The from email address given when sending operator emails
       - STATS_MG_FROM=channel-stats@your.odmain.com
       # Location of the database on disk, should be changed if you

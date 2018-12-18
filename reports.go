@@ -73,9 +73,9 @@ func (r *Report) Start() error {
 			data.Images["most-positive"] = r.genImage(RenderPercentage, timeRange, channel.Id, "positive")
 
 			// Email the report
-			/*if err := r.mail.Report(channel, &ReportData{}); err != nil {
+			if err := r.mail.Report(channel.Name, data); err != nil {
 				r.log.Errorf("while sending report: %s")
-			}*/
+			}
 		}
 	})
 	if err != nil {
