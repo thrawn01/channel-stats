@@ -2,6 +2,7 @@ package channelstats
 
 import (
 	"github.com/wcharczuk/go-chart"
+	"github.com/wcharczuk/go-chart/drawing"
 	"io"
 	"sort"
 )
@@ -54,6 +55,7 @@ func RenderSum(store Storer, w io.Writer, timeRange *TimeRange, channelID, count
 
 func renderBarChart(w io.Writer, bars []chart.Value) error {
 	sbc := chart.BarChart{
+		ColorPalette: RedColorPalette{},
 		Background: chart.Style{
 			Show: true,
 			Padding: chart.Box{
@@ -87,4 +89,44 @@ func renderBarChart(w io.Writer, bars []chart.Value) error {
 
 func FloatFormatter(v interface{}) string {
 	return chart.FloatValueFormatterWithFormat(v, "%.f")
+}
+
+type RedColorPalette struct{}
+
+func (dp RedColorPalette) BackgroundColor() drawing.Color {
+	return chart.DefaultBackgroundColor
+}
+
+func (dp RedColorPalette) BackgroundStrokeColor() drawing.Color {
+	return chart.DefaultBackgroundStrokeColor
+}
+
+func (dp RedColorPalette) CanvasColor() drawing.Color {
+	return chart.DefaultCanvasColor
+}
+
+func (dp RedColorPalette) CanvasStrokeColor() drawing.Color {
+	return chart.DefaultCanvasStrokeColor
+}
+
+func (dp RedColorPalette) AxisStrokeColor() drawing.Color {
+	return chart.DefaultAxisColor
+}
+
+func (dp RedColorPalette) TextColor() drawing.Color {
+	return chart.DefaultTextColor
+}
+
+var (
+	barColors = []drawing.Color{
+		{R: 255, G: 179, B: 179, A: 255}, // Light red
+		{R: 255, G: 128, B: 128, A: 255},
+		{R: 255, G: 77, B: 77, A: 255},
+		{R: 255, G: 0, B: 0, A: 255}, // Dark red
+	}
+)
+
+func (dp RedColorPalette) GetSeriesColor(index int) drawing.Color {
+	finalIndex := index % len(barColors)
+	return barColors[finalIndex]
 }
