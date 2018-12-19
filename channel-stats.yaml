@@ -49,6 +49,13 @@ store:
   # wish to persist the data to a mounted directory
   # Env: STATS_STORE_DATA_DIR
   data-dir: ./badger-db
+  # Size of the store internal cache
+  # Env: STATS_STORE_CACHE_SIZE
+  cache-size: 100
+  # Duration cached data will stay in the cache
+  # Env: STATS_STORE_CACHE_TTL
+  cache-ttl: 30s
+
 
 # Periodic report config
 report:

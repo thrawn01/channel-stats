@@ -37,9 +37,11 @@ type Storer interface {
 }
 
 type Store struct {
-	idMgr IDManager
-	log   *logrus.Entry
-	db    *badger.DB
+	idMgr    IDManager
+	log      *logrus.Entry
+	db       *badger.DB
+	cache    *holster.LRUCache
+	cacheTTL time.Duration
 }
 
 func NewStore(conf Config, idMgr IDManager) (Storer, error) {
@@ -57,9 +59,11 @@ func NewStore(conf Config, idMgr IDManager) (Storer, error) {
 		return nil, errors.Wrap(err, "while opening badger database")
 	}
 	return &Store{
-		log:   logger,
-		idMgr: idMgr,
-		db:    db,
+		cache:    holster.NewLRUCache(conf.Store.CacheSize),
+		cacheTTL: conf.Store.CacheTTL.Duration,
+		log:      logger,
+		idMgr:    idMgr,
+		db:       db,
 	}, nil
 }
 
@@ -155,6 +159,13 @@ type SumResp struct {
 func (s *Store) SumByUser(timeRange *TimeRange, channelID, counter string) ([]SumResp, error) {
 	var results []SumResp
 
+	// Check the cache first
+	cacheKey := fmt.Sprintf("%s/%s/%s", timeRange.String(), channelID, counter)
+	item, ok := s.cache.Get(cacheKey)
+	if ok {
+		return item.([]SumResp), nil
+	}
+
 	dataPoints, err := s.GetDataPoints(timeRange, channelID, counter)
 	if err != nil {
 		return nil, err
@@ -177,6 +188,11 @@ func (s *Store) SumByUser(timeRange *TimeRange, channelID, counter string) ([]Su
 	sort.Slice(results, func(i, j int) bool {
 		return results[i].Sum < results[j].Sum
 	})
+
+	if err == nil && len(results) != 0 {
+		// Add to the cache with TTL
+		s.cache.AddWithTTL(cacheKey, results, s.cacheTTL)
+	}
 
 	return results, nil
 }

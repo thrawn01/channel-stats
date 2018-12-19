@@ -28,6 +28,10 @@ services:
       # Location of the database on disk, should be changed if you
       # wish to persist the data to a mounted directory
       - STATS_STORE_DATA_DIR=/badger-db
+      # Size of the store internal cache
+      - STATS_STORE_CACHE_SIZE=100
+      # Duration cached data will stay in the cache
+      - STATS_STORE_CACHE_TTL=30s
       # The cron like string the dictates when reports are sent to users
       # (See https://godoc.org/github.com/robfig/cron#hdr-CRON_Expression_Format)
       - STATS_REPORT_SCHEDULE="0 0 0 * * SUN"

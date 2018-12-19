@@ -76,3 +76,7 @@ func (s *TimeRange) ByHour() []string {
 	}
 	return result
 }
+
+func (s *TimeRange) String() string {
+	return fmt.Sprintf("%s to %s", s.StartDate(), s.EndDate())
+}

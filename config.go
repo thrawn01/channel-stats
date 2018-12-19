@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,8 +41,11 @@ type SlackConfig struct {
 }
 
 type StoreConfig struct {
-	DataDir string `json:"data-dir" env:"STATS_STORE_DATA_DIR"`
+	DataDir   string             `json:"data-dir" env:"STATS_STORE_DATA_DIR"`
+	CacheSize int                `json:"cache-size" env:"STATS_STORE_CACHE_SIZE"`
+	CacheTTL  clock.DurationJSON `json:"cache-ttl" env:"STATS_STORE_CACHE_TTL"`
 }
+
 type MailgunConfig struct {
 	// Enable sending notifications via mailgun
 	Enabled bool `json:"enabled" env:"STATS_MG_ENABLED"`
@@ -117,9 +121,13 @@ func LoadConfig() (Config, error) {
 	}
 
 	holster.SetDefault(&conf.Store.DataDir, "./badger-db")
+	holster.SetDefault(&conf.Store.CacheTTL.Duration, time.Second*30)
+	holster.SetDefault(&conf.Store.CacheSize, 100)
+
 	holster.SetDefault(&conf.Report.Schedule, "0 0 0 * * SUN")
-	holster.SetDefault(&conf.Report.ReportDuration, time.Hour*168)
-	holster.SetDefault(&conf.Mailgun.Timeout, time.Second*20)
+	holster.SetDefault(&conf.Report.ReportDuration.Duration, time.Hour*168)
+
+	holster.SetDefault(&conf.Mailgun.Timeout.Duration, time.Second*20)
 
 	return conf, nil
 }
@@ -164,14 +172,25 @@ func SrcFromEnv(obj interface{}) {
 		}
 
 		var val interface{}
-		if field.Kind() == reflect.Bool {
+		switch field.Kind() {
+		case reflect.Int:
+			strVal := os.Getenv(field.Tag("env"))
+			if strVal == "" {
+				continue
+			}
+			val64, err := strconv.ParseInt(strVal, 10, 64)
+			if err != nil {
+				panic(fmt.Sprintf("While converting '%s' to an integer - %s", field.Name(), err))
+			}
+			val = int(val64)
+		case reflect.Bool:
 			strVal := strings.ToLower(os.Getenv(field.Tag("env")))
 			if strVal == "true" || strVal == "yes" {
 				val = true
 			} else {
 				val = false
 			}
-		} else {
+		default:
 			val = os.Getenv(field.Tag("env"))
 		}
 

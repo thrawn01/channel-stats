@@ -72,7 +72,7 @@ func NewServer(store Storer, idMgr IDManager) *Server {
 	r := chi.NewRouter()
 
 	// Middleware
-	r.Use(middleware.Logger)
+	r.Use(NewStructuredLogger(s.log))
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(5 * time.Second))
 

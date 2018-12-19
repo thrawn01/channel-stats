@@ -3,16 +3,17 @@ package channelstats
 import (
 	"bytes"
 	"fmt"
-	"github.com/go-chi/chi"
-	"github.com/pkg/errors"
-	"github.com/thrawn01/channel-stats/html"
-	"html/template"
 	"io"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
+
+	"github.com/go-chi/chi"
+	"github.com/pkg/errors"
+	"github.com/thrawn01/channel-stats/html"
 )
 
 func (s *Server) serveFiles(w http.ResponseWriter, r *http.Request) {
@@ -70,14 +71,20 @@ func (s *Server) serveFiles(w http.ResponseWriter, r *http.Request) {
 
 type TemplateData struct {
 	PageTitle   string
-	ChannelName string
+	PageHours   string
+	GraphParams string
 }
 
 func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
 	// Get a list of channels the bot has joined and is listening on
 	channels := filterOnlyMembers(s.idMgr.Channels())
 
-	// TODO: Parse form parameters
+	timeRange, err := NewTimeRange(r.FormValue("start-hour"), r.FormValue("end-hour"))
+	if err != nil {
+		abort(w, err, http.StatusBadRequest)
+		return
+	}
+
 	channelName := r.FormValue("channel")
 	if channelName != "" {
 		if err := isValidChannel(channelName, channels); err != nil {
@@ -92,11 +99,13 @@ func (s *Server) serveIndex(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		channelName = channels[0].Name
+		r.Form["channel"] = []string{channelName}
 	}
 
 	data := TemplateData{
 		PageTitle:   strings.Title(channelName),
-		ChannelName: channelName,
+		PageHours:   timeRange.String(),
+		GraphParams: r.Form.Encode(),
 	}
 
 	content, err := html.Get("html/index.tmpl")
