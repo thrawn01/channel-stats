@@ -1,10 +1,12 @@
 package channelstats
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/mailgun/mailgun-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -66,7 +68,7 @@ func (m *Mailgun) Report(channelName string, data ReportData) error {
 	message.SetHtml(string(data.Html))
 
 	for file, contents := range data.Images {
-		message.AddBufferAttachment(file, contents)
+		message.AddReaderInline(file, ioutil.NopCloser(bytes.NewBuffer(contents)))
 	}
 	_, id, err := m.mg.Send(message)
 	if err != nil {

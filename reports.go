@@ -45,47 +45,45 @@ func NewReporter(conf Config, list ChanLister, notify Mailer, store Storer) (Rep
 }
 
 func (r *Report) start() error {
-	//err := r.cron.AddFunc(r.conf.Report.Schedule, func() {
-	timeRange := toTimeRange(r.conf.Report.ReportDuration.Duration)
-	r.log.Debugf("Creating report for %s to %s", timeRange.Start, timeRange.End)
+	err := r.cron.AddFunc(r.conf.Report.Schedule, func() {
+		timeRange := toTimeRange(r.conf.Report.ReportDuration.Duration)
+		r.log.Debugf("Creating report for %s to %s", timeRange.Start, timeRange.End)
 
-	for _, channel := range r.list.Channels() {
-		// Skip channels the bot is not in
-		if !channel.IsMember {
-			continue
+		for _, channel := range r.list.Channels() {
+			// Skip channels the bot is not in
+			if !channel.IsMember {
+				continue
+			}
+
+			html, err := r.genHtml("templates/email.tmpl", channel.Name)
+			if err != nil {
+				r.log.Errorf("during email generate: %s", err)
+				return
+			}
+
+			data := ReportData{
+				Images: make(map[string][]byte),
+				Html:   html,
+			}
+
+			// Generate the images for the report
+			data.Images["most-active.png"] = r.genImage(RenderSum, timeRange, channel.Id, "messages")
+			data.Images["top-links.png"] = r.genImage(RenderSum, timeRange, channel.Id, "link")
+			data.Images["top-emoji.png"] = r.genImage(RenderSum, timeRange, channel.Id, "emoji")
+			data.Images["most-negative.png"] = r.genImage(RenderPercentage, timeRange, channel.Id, "negative")
+			data.Images["most-positive.png"] = r.genImage(RenderPercentage, timeRange, channel.Id, "positive")
+
+			// Email the report
+			if err := r.mail.Report(channel.Name, data); err != nil {
+				r.log.Errorf("while sending report: %s", err)
+			}
 		}
-
-		html, err := r.genHtml("templates/email.tmpl", channel.Name)
-		if err != nil {
-			r.log.Errorf("during email generate: %s", err)
-			return nil
-		}
-
-		data := ReportData{
-			Images: make(map[string][]byte),
-			Html:   html,
-		}
-
-		// Generate the images for the report
-		data.Images["most-active.png"] = r.genImage(RenderSum, timeRange, channel.Id, "messages")
-		/*data.Images["top-links.png"] = r.genImage(RenderSum, timeRange, channel.Id, "link")
-		data.Images["top-emoji.png"] = r.genImage(RenderSum, timeRange, channel.Id, "emoji")
-		data.Images["most-negative.png"] = r.genImage(RenderPercentage, timeRange, channel.Id, "negative")
-		data.Images["most-positive.png"] = r.genImage(RenderPercentage, timeRange, channel.Id, "positive")*/
-
-		//spew.Dump(data)
-
-		// Email the report
-		if err := r.mail.Report(channel.Name, data); err != nil {
-			r.log.Errorf("while sending report: %s", err)
-		}
+	})
+	if err != nil {
+		return err
 	}
-	//})
-	//if err != nil {
-	//	return err
-	//}
 
-	//r.cron.Start()
+	r.cron.Start()
 	return nil
 }
 
@@ -100,6 +98,9 @@ func (r *Report) genImage(render RenderFunc, timeRange *TimeRange, channelID, co
 	if err := render(r.store, w, timeRange, channelID, counter); err != nil {
 		r.log.Errorf("while rendering image for channel: '%s' '%s': %s", channelID, counter, err)
 	}
+
+	w.Flush()
+
 	return buf.Bytes()
 }
 
