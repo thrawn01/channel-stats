@@ -21,7 +21,7 @@
         <div class="media-container-row">
             <div class="title col-12 col-md-8">
                 <h2 class="align-center pb-3 mbr-fonts-style display-2">
-                    Skunkworks</h2>
+                    {{ .PageTitle }}</h2>
                 <h3 class="mbr-section-subtitle align-center mbr-light mbr-fonts-style display-5">
                     Channel Stats</h3>
             </div>
@@ -35,21 +35,21 @@
             <div class="card p-3 col-12 col-md-6 col-lg-4">
                 <div class="card-img" style="padding-top: 0px">
                 <h4 class="card-title py-3 mbr-fonts-style display-7" style="margin-bottom: 0px;">Most Active</h4>
-                    <img src="/api/chart/sum?channel=general&counter=messages">
+                    <img src="/api/chart/sum?channel={{ .ChannelName }}&counter=messages">
                 </div>
             </div>
 
             <div class="card p-3 col-12 col-md-6 col-lg-4">
                 <div class="card-img" style="padding-top: 0px">
                 <h4 class="card-title py-3 mbr-fonts-style display-7" style="margin-bottom: 0px;">% Most Negative</h4>
-                    <img src="/api/chart/percentage?channel=general&counter=negative">
+                    <img src="/api/chart/percentage?channel={{ .ChannelName }}&counter=negative">
                 </div>
             </div>
 
             <div class="card p-3 col-12 col-md-6 col-lg-4">
                 <div class="card-img" style="padding-top: 0px">
                 <h4 class="card-title py-3 mbr-fonts-style display-7" style="margin-bottom: 0px;">% Most Positive</h4>
-                    <img src="/api/chart/percentage?channel=general&counter=positive">
+                    <img src="/api/chart/percentage?channel={{ .ChannelName }}&counter=positive">
                 </div>
             </div>
         </div>
@@ -59,14 +59,14 @@
             <div class="card p-3 col-12 col-md-6 col-lg-4">
                 <div class="card-img" style="padding-top: 0px">
                 <h4 class="card-title py-3 mbr-fonts-style display-7" style="margin-bottom: 0px;">Top Links Posted</h4>
-                    <img src="/api/chart/sum?channel=general&counter=link">
+                    <img src="/api/chart/sum?channel={{ .ChannelName }}&counter=link">
                 </div>
             </div>
 
             <div class="card p-3 col-12 col-md-6 col-lg-4">
                 <div class="card-img" style="padding-top: 0px">
                 <h4 class="card-title py-3 mbr-fonts-style display-7" style="margin-bottom: 0px;">Top Emoji Users</h4>
-                    <img src="/api/chart/sum?channel=general&counter=emoji">
+                    <img src="/api/chart/sum?channel={{ .ChannelName }}&counter=emoji">
                 </div>
             </div>
         </div>

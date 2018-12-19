@@ -55,7 +55,7 @@ func (r *Report) start() error {
 				continue
 			}
 
-			html, err := r.genHtml("templates/email.tmpl", channel.Name)
+			html, err := r.genHtml("html/templates/email.tmpl", channel.Name)
 			if err != nil {
 				r.log.Errorf("during email generate: %s", err)
 				return

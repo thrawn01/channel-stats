@@ -4,25 +4,30 @@ package html
 
 import (
 	"bytes"
+	"fmt"
 	"os"
-	"path"
+	"path/filepath"
+	"strings"
 )
 
 func Get(file string) ([]byte, error) {
-	filePath := path.Join("./html", file)
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return Asset(file)
+	// If the file doesn't exist locally (We are running in a dev environment)
+	if _, err := os.Stat(file); os.IsNotExist(err) {
+		filePath := strings.TrimPrefix(filepath.ToSlash(
+			strings.TrimPrefix(file, "/html")), "/")
+		fmt.Printf("asset file: %s\n", file)
+		return Asset(filePath)
 	}
 
 	// First attempt to load the file from disk
-	f, err := os.Open(filePath)
+	fd, err := os.Open(file)
 	if err != nil {
-		return nil, err
+		return nil, &os.PathError{Op: "open", Path: file, Err: err}
 	}
-	defer f.Close()
+	defer fd.Close()
 
 	buf := bytes.NewBuffer([]byte{})
-	buf.ReadFrom(f)
+	buf.ReadFrom(fd)
 
 	return buf.Bytes(), nil
 }
