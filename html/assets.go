@@ -14,7 +14,7 @@ func Get(file string) ([]byte, error) {
 	// If the file doesn't exist locally (We are running in a dev environment)
 	if _, err := os.Stat(file); os.IsNotExist(err) {
 		filePath := strings.TrimPrefix(filepath.ToSlash(
-			strings.TrimPrefix(file, "/html")), "/")
+			strings.TrimPrefix(file, "html/")), "/")
 		fmt.Printf("asset file: %s\n", file)
 		return Asset(filePath)
 	}
