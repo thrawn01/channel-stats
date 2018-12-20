@@ -162,7 +162,9 @@ func SrcFromEnv(obj interface{}) {
 			if _, ok := field.Value().(clock.DurationJSON); ok {
 				if tag := field.Tag("env"); tag != "" {
 					if value := os.Getenv(tag); value != "" {
-						field.Set(clock.NewDurationJSONOrPanic(tag))
+						if err := field.Set(clock.NewDurationJSONOrPanic(value)); err != nil {
+							panic(fmt.Sprintf("While setting '%s' - %s", field.Name(), err))
+						}
 					}
 				}
 			} else {
