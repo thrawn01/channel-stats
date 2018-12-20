@@ -3,7 +3,6 @@ module github.com/thrawn01/channel-stats
 require (
 	cirello.io v1.2.0
 	github.com/AndreasBriese/bbloom v0.0.0-20170702084017-28f7e881ca57 // indirect
-	github.com/davecgh/go-spew v1.1.1
 	github.com/dgraph-io/badger v1.5.4
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/dgryski/go-farm v0.0.0-20180109070241-2de33835d102 // indirect

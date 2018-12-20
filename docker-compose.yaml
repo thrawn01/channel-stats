@@ -1,8 +1,11 @@
-version: '3'
+version: '2'
 services:
   channel-stats:
     image: thrawn01/channel-stats:latest
     command: "/channel-stats"
+    # Persist the database locally
+    #volumes:
+    #  - ${PWD}/badger-db:/badger-db
     environment:
       # 'token' is a bot token from a slack app. Create a slack app here
       # https://api.slack.com/apps then get the bot token from 'OAuth & Permissions'
@@ -34,7 +37,7 @@ services:
       - STATS_STORE_CACHE_TTL=30s
       # The cron like string the dictates when reports are sent to users
       # (See https://godoc.org/github.com/robfig/cron#hdr-CRON_Expression_Format)
-      - STATS_REPORT_SCHEDULE="0 0 0 * * SUN"
+      - STATS_REPORT_SCHEDULE=0 0 0 * * SUN
       # The duration used to decide the start and end hour of the report
       # (See http://golang.org/pkg/time/#ParseDuration for string format)
       - STATS_REPORT_DURATION=168h
