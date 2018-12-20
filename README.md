@@ -1,6 +1,61 @@
 ## Channel Stats Slack Bot
 A slack bot to collect sentiment analysis and other statistics for a channel.
 
+## Web Interface
+Channel-stats provides a simple Web UI that displays graphs for the last 7 days and by default it displays
+the first channel it discovers. You can change the channel and time range by passing the `start-hour`, `end-hour`
+ and `channel` form parameters identical to that of the API. See the API docs below for valid parameters and format.
+
+UI is available via http://localhost:2020/ui/index
+
+![Screenshot Here](https://raw.githubusercontent.com/thrawn01/channel-stats/master/ui-screenshot.png)
+
+###### Help wanted 
+The UI needs some love, the original plan was to add a black header with a channel dropdown and date selectors but 
+my UI foo sucks. Send a PR if you have some ideas and want to improve it! (We don't have to use the png graphs, we
+could also use something like chartjs to make the graphs pretty.) If you run `go run ./cmd/channel-stats/main.go` 
+it will serve the files in `./html` instead of the compiled binary files. So you can change anything about the UI and 
+see the result without needing to recompile.
+
+## Run via docker
+Easiest way to get started is by running `channel-stats` in a docker
+container using the pre-built image.
+
+```bash
+# Download the docker-compose file
+$ curl -O https://raw.githubusercontent.com/thrawn01/channel-stats/master/docker-compose.yaml
+
+# Edit the compose file
+# environment variables
+$ vi docker-compose.yaml
+
+# Run the docker container
+$ docker-compose up -d
+
+# Hit the API at localhost:2020
+$ curl http://localhost:2020/api | jq
+```
+
+## Run locally
+* Download the release binary from [Releases Page](https://github.com/thrawn01/channel-stats/releases)
+* Download the [example yaml](https://raw.githubusercontent.com/thrawn01/channel-stats/master/channel-stats.yaml) 
+* Edit the example yaml
+* Run `./channel-stats --config /path/to/config.yaml`
+* Hit the api at `curl http://localhost:2020/api | jq`
+
+## Develop
+channel-stats uses go 1.11 modules for dependency management
+
+```bash
+$ git clone https://github.com/thrawn01/channel-stats.git
+$ cd channel-stats
+$ make
+```
+
+### Last Step!
+Once you have provided your slack token and the bot is connected to slack, you must
+invite the bot to a channel. It will only collect stats for channels it has been invited too!
+
 ## API Documentation
 The bot stores event counts by hour such that when querying for results all
 calls can include a `start-hour` and an `end-hour`. If no **start** or
@@ -146,47 +201,4 @@ $ curl 'http://localhost:2020/api/datapoints?channel=general&counter=messages' |
     ]
 }
 ```
-
-## Web UI
-This project kinda has a UI ... but it's super limited. If anyone is interested in making a cool looking interface,
- the place holder for a UI is available via http://localhost:2020/ui/index.html when run from the local go source via
- `go run ./cmd/channel-stats/main.go`
-
-![Screenshot Here](https://raw.githubusercontent.com/thrawn01/channel-stats/master/ui-screenshot.png)
-
-## Run via docker
-Easiest way to get started is by running `channel-stats` in a docker
-container using the pre-built image.
-
-```bash
-# Download the docker-compose file
-$ curl -O https://raw.githubusercontent.com/thrawn01/channel-stats/master/docker-compose.yaml
-
-# Edit the compose file
-# environment variables
-$ vi docker-compose.yaml
-
-# Run the docker container
-$ docker-compose up -d
-
-# Hit the API at localhost:2020
-$ curl http://localhost:2020/api | jq
-```
-
-## Run locally
-* Download the release binary from [Releases Page](https://github.com/thrawn01/channel-stats/releases)
-* Download the [example yaml](https://raw.githubusercontent.com/thrawn01/channel-stats/master/channel-stats.yaml) 
-* Edit the example yaml
-* Run `./channel-stats --config /path/to/config.yaml`
-* Hit the api at localhost:2020 `curl http://localhost:2020/api | jq`
-
-## Develop
-channel-stats uses go 1.11 modules for dependency management
-
-```bash
-# Clone the repo
-$ git clone FIXME
-$ make
-```
-
 
