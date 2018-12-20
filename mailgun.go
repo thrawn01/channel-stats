@@ -47,7 +47,7 @@ func NewMailgunNotifier(conf Config) (Mailer, error) {
 	mg.SetClient(client)
 
 	return &Mailgun{
-		log:  GetLogger().WithField("prefix", "notifier"),
+		log:  GetLogger().WithField("prefix", "mailer"),
 		conf: conf,
 		mg:   mg,
 	}, nil
