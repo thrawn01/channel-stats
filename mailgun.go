@@ -2,12 +2,13 @@ package channelstats
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"github.com/mailgun/mailgun-go"
+	"io/ioutil"
+
+	"github.com/mailgun/mailgun-go/v3"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"io/ioutil"
-	"net/http"
 )
 
 type ReportData struct {
@@ -38,18 +39,10 @@ func NewMailer(conf Config) (Mailer, error) {
 }
 
 func NewMailgunNotifier(conf Config) (Mailer, error) {
-
-	mg := mailgun.NewMailgun(conf.Mailgun.Domain, conf.Mailgun.APIKey)
-
-	// Set a reasonable timeout on network operations
-	client := http.DefaultClient
-	client.Timeout = conf.Mailgun.Timeout.Duration
-	mg.SetClient(client)
-
 	return &Mailgun{
+		mg:   mailgun.NewMailgun(conf.Mailgun.Domain, conf.Mailgun.APIKey),
 		log:  GetLogger().WithField("prefix", "mailer"),
 		conf: conf,
-		mg:   mg,
 	}, nil
 }
 
@@ -70,7 +63,11 @@ func (m *Mailgun) Report(channelName string, data ReportData) error {
 	for file, contents := range data.Images {
 		message.AddReaderInline(file, ioutil.NopCloser(bytes.NewBuffer(contents)))
 	}
-	_, id, err := m.mg.Send(message)
+
+	ctx, cancel := context.WithTimeout(context.Background(), m.conf.Mailgun.Timeout.Duration)
+	defer cancel()
+
+	_, id, err := m.mg.Send(ctx, message)
 	if err != nil {
 		return err
 	}
@@ -87,7 +84,11 @@ func (m *Mailgun) Operator(msg string) error {
 
 	message := m.mg.NewMessage(m.conf.Mailgun.From, "[channel-stats] Operator Notification",
 		msg, m.conf.Mailgun.OperatorAddr)
-	_, id, err := m.mg.Send(message)
+
+	ctx, cancel := context.WithTimeout(context.Background(), m.conf.Mailgun.Timeout.Duration)
+	defer cancel()
+
+	_, id, err := m.mg.Send(ctx, message)
 	if err != nil {
 		return errors.Wrap(err, "while sending operator notification via Mailgun")
 	}

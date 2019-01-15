@@ -1,89 +1,63 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!DOCTYPE html>
+<html>
 <head>
-<meta name="viewport" content="width=device-width" />
-<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-<title>Channel Stats Report for {{ .Name }}</title>
-<link href="styles.css" media="all" rel="stylesheet" type="text/css" />
+    <title>Channel-Stats Report</title>
+    <style>
+        @font-face {
+            font-family: 'Helvetica Neue';
+            font-style: normal;
+            font-weight: 400;
+            src: local('Helvetica Neue'), local('HelveticaNeue'), url(https://fonts.gstatic.com/l/font?kit=jAnfgHBgCsv4eNLTaMECf8DQsNS1exCsfw&skey=4ad46dd97873f7d7&v=v9) format('woff2');
+            unicode-range: U+0100-024F, U+0259, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF;
+        }
+            /* latin */
+        @font-face {
+            font-family: 'Helvetica Neue';
+            font-style: normal;
+            font-weight: 400;
+            src: local('Helvetica Neue'), local('HelveticaNeue'), url(https://fonts.gstatic.com/l/font?kit=jAnfgHBgCsv4eNLTaMECf8DQsNS7exA&skey=4ad46dd97873f7d7&v=v9) format('woff2');
+            unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+        }
+        *, *:after, *:before {
+            -moz-box-sizing: border-box;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+    </style>
 </head>
+<body style="padding: 0; margin: 0; background-color: #fff; font-family: 'Helvetica Neue'; font-size: 15px; font-weight: 400; color: #4a4a4a;">
 
-<body itemscope itemtype="http://schema.org/EmailMessage">
+    <div style="max-width: 375px; margin: 0 auto; background: #e6e6e6">
 
-<table class="body-wrap">
-	<tr>
-		<td></td>
-		<td class="container" width="600">
-			<div class="content">
-				<table class="main" width="100%" cellpadding="0" cellspacing="0">
-					<tr>
-						<td class="content-wrap aligncenter">
-							<table width="100%" cellpadding="0" cellspacing="0">
-								<tr>
-									<td class="content-block">
-										<h1 class="aligncenter">Channel Report For {{ .Name }}</h1>
-									</td>
-								</tr>
-								<tr>
-									<td class="content-block aligncenter">
-										<table class="invoice">
-											<tr>
-												<td class="content-block">
-													<h2 class="aligncenter">Most Active</h2>
-												</td>
-											</tr>
-											<tr>
-												<td class="content-block">
-													<img src="cid:most-active.png">
-												</td>
-											</tr>
-											<tr>
-												<td class="content-block">
-													<h4 class="aligncenter">Most Positive</h4>
-												</td>
-											</tr>
-											<tr>
-												<td class="content-block">
-													<img src="cid:most-active.png">
-												</td>
-											</tr>
-											<tr>
-												<td class="content-block">
-													<h4 class="aligncenter">Most Negative</h4>
-												</td>
-											</tr>
-											<tr>
-												<td class="content-block">
-													<img src="cid:most-active.png">
-												</td>
-											</tr>
-										</table>
-									</td>
-								</tr>
-								<tr>
-									<td class="content-block aligncenter">
-										<a href="http://www.mailgun.com">View in browser</a>
-									</td>
-								</tr>
-								<tr>
-									<td class="content-block aligncenter">
-										Acme Inc. 123 Van Ness, San Francisco 94102
-									</td>
-								</tr>
-							</table>
-						</td>
-					</tr>
-				</table>
-				<div class="footer">
-					<table width="100%">
-						<tr>
-							<td class="aligncenter content-block">Questions? Email <a href="mailto:">support@acme.inc</a></td>
-						</tr>
-					</table>
-				</div></div>
-		</td>
-		<td></td>
-	</tr>
-</table>
+        <div style="text-align: center; line-height: 55px; background: #fff; font-size: 22px;">
+            Channel Report
+        </div>
+        <div style="padding-bottom: 30px; padding-top: 30px; text-align: center;">
+            Channel {{ .Name }}
+        </div>
+
+        <div style="text-align: center;  max-width: 324px; margin: 0 auto 15px auto; background: #fff; ">
+            <div style="line-height: 45px; font-weight: bold;">Most Active</div>
+            <img style="max-width: 100%" src="cid:most-active.png" alt="Image"/>
+        </div>
+
+        <div style="text-align: center;  max-width: 324px; margin: 0 auto 15px auto; background: #fff; ">
+            <div style="line-height: 45px; font-weight: bold;">Most Positive</div>
+            <img style="max-width: 100%" src="cid:most-positive.png" alt="Image"/>
+        </div>
+
+        <div style="text-align: center;  max-width: 324px; margin: 0 auto 15px auto; background: #fff; ">
+            <div style="line-height: 45px; font-weight: bold;">Most Negative</div>
+            <img style="max-width: 100%" src="cid:most-negative.png" alt="Image"/>
+        </div>
+
+        <p style="text-align: center; margin-top: 24px; padding-bottom: 30px; margin-bottom: 0; font-size: 13px;">
+            Generated by channel-stats slack bot
+        </p>
+
+    </div>
 
 </body>
 </html>
